@@ -22,6 +22,7 @@ import {
   Settings,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { novelize } from "@/lib/api"
 
 interface ZineCreatorProps {
   onBack: () => void
@@ -1064,6 +1065,22 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
 
   const hasZineContent = pages.some((page) => page.elements.length > 0) || zineTitle.trim() !== ""
 
+  // 小説化機能
+  const handleNovelize = async () => {
+    const concept = `${conceptConfig.length === "short" ? "短編" : "長編"} ${conceptConfig.genre === "sf" ? "SF" : "ラブコメ"} ${conceptConfig.keywords}`
+    const world = `キャラクター名: ${worldviewConfig.characterName}, 性格: ${worldviewConfig.personality}, シナリオ: ${worldviewConfig.scenario}`
+    const prompt = "上記の設定に基づいて魅力的な小説を書いてください。"
+    
+    try {
+      const result = await novelize({ concept, world, prompt })
+      setNovelContent(result.text)
+      setMode("novel")
+    } catch (error) {
+      console.error("小説化エラー:", error)
+      alert("小説の生成に失敗しました。設定を確認してください。")
+    }
+  }
+
 
 
   return (
@@ -1543,7 +1560,7 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
 
                 <div className="mt-6 pt-6 border-t" style={{ borderColor: "rgba(139, 115, 85, 0.3)" }}>
                   <Button
-                    onClick={() => setMode("novel")}
+                    onClick={handleNovelize}
                     className="w-full text-white"
                     style={{
                       background: "linear-gradient(135deg, #8b6914 0%, #a0751f 50%, #b8860b 100%)"
