@@ -1,0 +1,8 @@
+name: zine-app-auto-deploy
+description: Automatically deploy to Cloud Run on push to main
+github:
+  owner: kouta0901
+  name: zine-app
+  push:
+    branch: ^main$
+filename: cloudbuild.yaml

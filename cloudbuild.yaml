@@ -1,0 +1,72 @@
+substitutions:
+  _REGION: "asia-northeast1"
+  _REPO: "zine-repo"
+
+steps:
+  # Build Frontend (Web)
+  - name: gcr.io/cloud-builders/docker
+    args: ["build",
+           "-t","${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/web:$SHORT_SHA",
+           "-f","zine-app/Dockerfile",
+           "zine-app"]
+    id: "build-web"
+
+  # Build API
+  - name: gcr.io/cloud-builders/docker
+    args: ["build",
+           "-t","${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/api:$SHORT_SHA",
+           "-f","api/Dockerfile", 
+           "api"]
+    id: "build-api"
+
+  # Push Frontend
+  - name: gcr.io/cloud-builders/docker
+    args: ["push","${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/web:$SHORT_SHA"]
+    waitFor: ["build-web"]
+
+  # Push API
+  - name: gcr.io/cloud-builders/docker
+    args: ["push","${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/api:$SHORT_SHA"]
+    waitFor: ["build-api"]
+
+  # Deploy Frontend to Cloud Run
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      ["run","deploy","web",
+       "--image","${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/web:$SHORT_SHA",
+       "--region","${_REGION}",
+       "--platform","managed",
+       "--allow-unauthenticated",
+       "--quiet"]
+    waitFor: ["build-web"]
+
+  # Deploy API to Cloud Run
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      ["run","deploy","api",
+       "--image","${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/api:$SHORT_SHA",
+       "--region","${_REGION}",
+       "--platform","managed",
+       "--set-env-vars","GOOGLE_CLOUD_LOCATION=${_REGION},COVER_BUCKET=vital-analogy-470911-t0-covers",
+       "--allow-unauthenticated",
+       "--quiet"]
+    waitFor: ["build-api"]
+
+  # Update Frontend Environment Variable (API URL)
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    args:
+      - "-c"
+      - |
+        API_URL=$$(gcloud run services describe api --region=${_REGION} --format='value(status.url)')
+        gcloud run services update web \
+          --region=${_REGION} \
+          --set-env-vars="NEXT_PUBLIC_API_BASE=$$API_URL" \
+          --quiet
+    waitFor: ["api", "web"]
+
+images:
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/web:$SHORT_SHA"
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/api:$SHORT_SHA"
