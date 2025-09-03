@@ -105,6 +105,7 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
   const [editingElement, setEditingElement] = useState<string | null>(null)
   const [tempTextContent, setTempTextContent] = useState("")
   const [isDragOver, setIsDragOver] = useState(false)
+  const [isGeneratingNovel, setIsGeneratingNovel] = useState(false)
 
   const [selectedText, setSelectedText] = useState<TextSelection | null>(null)
   const [reviewSuggestions, setReviewSuggestions] = useState<ReviewSuggestion[]>([])
@@ -283,7 +284,7 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
   const splitNovelContent = (content: string): string[] => {
     if (!content.trim()) return []
     
-    const CHARS_PER_PAGE = 800 // 1ページあたりの文字数
+    const CHARS_PER_PAGE = 600 // 1ページあたりの文字数（見やすさのため少し減らす）
     const paragraphs = content.split('\n\n')
     const pages: string[] = []
     let currentPage = ""
@@ -291,13 +292,41 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
     for (const paragraph of paragraphs) {
       const paragraphWithBreak = paragraph + '\n\n'
       
-      if (currentPage.length + paragraphWithBreak.length <= CHARS_PER_PAGE) {
-        currentPage += paragraphWithBreak
-      } else {
+      // 段落が1ページ分を超える場合は、さらに分割
+      if (paragraphWithBreak.length > CHARS_PER_PAGE) {
         if (currentPage.trim()) {
           pages.push(currentPage.trim())
+          currentPage = ""
         }
-        currentPage = paragraphWithBreak
+        
+        // 長い段落を文単位で分割
+        const sentences = paragraph.split(/([。！？])/g)
+        let tempContent = ""
+        
+        for (let i = 0; i < sentences.length; i += 2) {
+          const sentence = sentences[i] + (sentences[i + 1] || "")
+          if ((tempContent + sentence).length <= CHARS_PER_PAGE) {
+            tempContent += sentence
+          } else {
+            if (tempContent.trim()) {
+              pages.push(tempContent.trim())
+            }
+            tempContent = sentence
+          }
+        }
+        
+        if (tempContent.trim()) {
+          currentPage = tempContent + '\n\n'
+        }
+      } else {
+        if (currentPage.length + paragraphWithBreak.length <= CHARS_PER_PAGE) {
+          currentPage += paragraphWithBreak
+        } else {
+          if (currentPage.trim()) {
+            pages.push(currentPage.trim())
+          }
+          currentPage = paragraphWithBreak
+        }
       }
     }
     
@@ -1204,13 +1233,22 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
 
   // 小説化機能
   const handleNovelize = async () => {
-    const concept = `${conceptConfig.length === "short" ? "短編" : "長編"} ${conceptConfig.genre === "sf" ? "SF" : "ラブコメ"} ${conceptConfig.keywords}`
-    const world = `キャラクター名: ${worldviewConfig.characterName}, 性格: ${worldviewConfig.personality}, シナリオ: ${worldviewConfig.scenario}`
-    const prompt = "上記の設定に基づいて魅力的な小説を書いてください。"
+    setIsGeneratingNovel(true) // ローディング開始
     
     try {
+      const concept = `${conceptConfig.length === "short" ? "短編" : "長編"} ${conceptConfig.genre === "sf" ? "SF" : "ラブコメ"} ${conceptConfig.keywords}`
+      const world = `キャラクター名: ${worldviewConfig.characterName}, 性格: ${worldviewConfig.personality}, シナリオ: ${worldviewConfig.scenario}`
+      
+      // ZINEの内容も含める
+      const zineContent = pages.map(page => 
+        page.elements.map(el => el.content).join('\n')
+      ).join('\n\n')
+      
+      const prompt = `上記の設定とZINEの内容「${zineContent}」に基づいて、完全な${conceptConfig.length === "short" ? "短編小説（2000-4000文字）" : "長編小説（5000-8000文字）"}を書いてください。章立てして、起承転結のしっかりとした物語を作成してください。`
+      
       const result = await novelize({ concept, world, prompt })
       setNovelContent(result.text)
+      
       // テキストを複数ページに分割
       const splitPages = splitNovelContent(result.text)
       setNovelPages(splitPages)
@@ -1219,6 +1257,8 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
     } catch (error) {
       console.error("小説化エラー:", error)
       alert("小説の生成に失敗しました。設定を確認してください。")
+    } finally {
+      setIsGeneratingNovel(false) // ローディング終了
     }
   }
 
@@ -1229,6 +1269,62 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
       background: "linear-gradient(135deg, #f7f1e8 0%, #f5ede1 25%, #f3e9d4 50%, #f1e5c7 75%, #ede0ba 100%)",
       color: "#4a3c28"
     }}>
+      {/* 小説生成ローディング画面 */}
+      {isGeneratingNovel && (
+        <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: "rgba(74, 60, 40, 0.8)" }}>
+          <motion.div
+            className="rounded-xl p-8 max-w-md text-center"
+            style={{
+              background: "linear-gradient(135deg, rgba(247, 241, 232, 0.95) 0%, rgba(241, 229, 199, 0.95) 100%)",
+              border: "1px solid rgba(139, 115, 85, 0.3)",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.4)"
+            }}
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.3 }}
+          >
+            <motion.div
+              className="w-16 h-16 mx-auto mb-6 rounded-full border-4"
+              style={{
+                borderColor: "#8b6914",
+                borderTopColor: "transparent"
+              }}
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+            />
+            <h3 className="text-xl font-bold mb-2" style={{ color: "#4a3c28" }}>
+              小説を生成中...
+            </h3>
+            <p className="text-sm mb-4" style={{ color: "#8b7355" }}>
+              AI作家があなたのZINEを基に<br />
+              魅力的な物語を紡いでいます
+            </p>
+            <motion.div
+              className="flex justify-center space-x-1"
+              initial="hidden"
+              animate="visible"
+            >
+              {[0, 1, 2].map((i) => (
+                <motion.div
+                  key={i}
+                  className="w-2 h-2 rounded-full"
+                  style={{ backgroundColor: "#8b6914" }}
+                  variants={{
+                    hidden: { opacity: 0.3 },
+                    visible: { opacity: 1 }
+                  }}
+                  transition={{
+                    duration: 0.5,
+                    repeat: Infinity,
+                    repeatType: "reverse",
+                    delay: i * 0.2
+                  }}
+                />
+              ))}
+            </motion.div>
+          </motion.div>
+        </div>
+      )}
       {showZineExamples && (
         <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: "rgba(74, 60, 40, 0.5)" }}>
           <motion.div
