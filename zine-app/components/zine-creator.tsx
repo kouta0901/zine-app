@@ -25,7 +25,7 @@ import {
   Plus,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { novelize } from "@/lib/api"
+import { novelize, review } from "@/lib/api"
 
 interface ZineCreatorProps {
   onBack: () => void
@@ -1005,29 +1005,73 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
     "ドラマチックに",
   ]
 
+  // 文体を小説全体に適用する関数
+  const applyStyleToNovel = async (text: string, style: string): Promise<string> => {
+    try {
+      const result = await review({
+        original: text,
+        instruction: `この小説全体の文体を「${style}」変更してください。内容は維持し、文体のみを変更してください。`
+      })
+      return result.text
+    } catch (error) {
+      console.error("文体適用エラー:", error)
+      throw error
+    }
+  }
+
+  // ワンポイントを小説全体に適用する関数
+  const applyOnepointToNovel = async (text: string, adjustment: string): Promise<string> => {
+    try {
+      const result = await review({
+        original: text,
+        instruction: `この小説全体を「${adjustment}」という雰囲気に調整してください。内容は維持し、トーンや雰囲気のみを調整してください。`
+      })
+      return result.text
+    } catch (error) {
+      console.error("ワンポイント適用エラー:", error)
+      throw error
+    }
+  }
+
   const renderStylePanel = () => (
     <div className="space-y-4">
       <h3 className="font-semibold mb-3" style={{ color: "#4a3c28" }}>文体修正</h3>
+      <p className="text-xs mb-3" style={{ color: "#a0896c" }}>小説全体の文体を変更します</p>
 
       <div className="space-y-2">
-        <h4 className="text-sm" style={{ color: "#8b7355" }}>よく使われる修正</h4>
+        <h4 className="text-sm" style={{ color: "#8b7355" }}>文体スタイルを選択</h4>
         <div className="grid grid-cols-1 gap-2">
           {styleOptions.map((option, index) => (
             <Button
               key={index}
               variant="outline"
               size="sm"
-              onClick={() => {
-                const newMessage = { role: "user" as const, content: `文体を「${option}」修正してください` }
+              onClick={async () => {
+                const newMessage = { role: "user" as const, content: `文体を「${option}」に変更してください` }
                 setStyleMessages([...styleMessages, newMessage])
-                // AI response simulation
-                setTimeout(() => {
+                
+                // Apply style to entire novel
+                try {
+                  // Call API with entire novel text
+                  const styledText = await applyStyleToNovel(novelContent, option)
+                  setNovelContent(styledText)
+                  
+                  // Split the styled text into pages
+                  const newPages = splitNovelContent(styledText)
+                  setNovelPages(newPages)
+                  
                   const aiResponse = {
                     role: "assistant" as const,
-                    content: `「${option}」の文体で修正いたします。修正したい箇所を選択してください。`,
+                    content: `小説全体を「${option}」の文体に変更しました。`,
                   }
                   setStyleMessages((prev) => [...prev, aiResponse])
-                }, 1000)
+                } catch (error) {
+                  const errorResponse = {
+                    role: "assistant" as const,
+                    content: `文体の変更に失敗しました。もう一度お試しください。`,
+                  }
+                  setStyleMessages((prev) => [...prev, errorResponse])
+                }
               }}
               className="justify-start text-xs"
               style={{
@@ -1108,6 +1152,7 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
   const renderOnepointPanel = () => (
     <div className="space-y-4">
       <h3 className="font-semibold mb-3" style={{ color: "#4a3c28" }}>ワンポイント修正</h3>
+      <p className="text-xs mb-3" style={{ color: "#a0896c" }}>小説全体の雰囲気を調整します</p>
 
       <div className="space-y-2">
         <h4 className="text-sm" style={{ color: "#8b7355" }}>雰囲気の調整</h4>
@@ -1117,17 +1162,32 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
               key={index}
               variant="outline"
               size="sm"
-              onClick={() => {
-                const newMessage = { role: "user" as const, content: `「${option}」してください` }
+              onClick={async () => {
+                const newMessage = { role: "user" as const, content: `小説を「${option}」調整してください` }
                 setOnepointMessages([...onepointMessages, newMessage])
-                // AI response simulation
-                setTimeout(() => {
+                
+                // Apply adjustment to entire novel
+                try {
+                  // Call API with entire novel text
+                  const adjustedText = await applyOnepointToNovel(novelContent, option)
+                  setNovelContent(adjustedText)
+                  
+                  // Split the adjusted text into pages
+                  const newPages = splitNovelContent(adjustedText)
+                  setNovelPages(newPages)
+                  
                   const aiResponse = {
                     role: "assistant" as const,
-                    content: `「${option}」の調整を行います。修正したい箇所を選択してください。`,
+                    content: `小説全体を「${option}」雰囲気に調整しました。`,
                   }
                   setOnepointMessages((prev) => [...prev, aiResponse])
-                }, 1000)
+                } catch (error) {
+                  const errorResponse = {
+                    role: "assistant" as const,
+                    content: `雰囲気の調整に失敗しました。もう一度お試しください。`,
+                  }
+                  setOnepointMessages((prev) => [...prev, errorResponse])
+                }
               }}
               className="justify-start text-xs"
               style={{
