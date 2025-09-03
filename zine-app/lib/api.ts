@@ -1,4 +1,6 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE;
+// 一時的にハードコード（後で環境変数に戻す）
+// 注: 実際のデプロイされたAPI URLを使用
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'https://api-2be2c4ycca-an.a.run.app';
 
 // API呼び出し用のヘルパー関数
 async function apiCall(endpoint: string, payload: any) {

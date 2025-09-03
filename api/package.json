@@ -1,9 +1,8 @@
 {
   "name": "zine-api",
   "version": "1.0.0",
-  "type": "module",
   "scripts": {
-    "dev": "ts-node --esm server.ts",
+    "dev": "ts-node server.ts",
     "start": "node dist/server.js",
     "build": "tsc -p ."
   },

@@ -20,6 +20,9 @@ import {
   FileText,
   Brush,
   Settings,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { novelize } from "@/lib/api"
@@ -98,6 +101,7 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
   const [novelContent, setNovelContent] = useState("")
   const [bookTheme, setBookTheme] = useState<"light" | "sepia" | "dark">("light")
   const [currentNovelPage, setCurrentNovelPage] = useState(1)
+  const [novelPages, setNovelPages] = useState<string[]>([])
 
   const [selectedText, setSelectedText] = useState<TextSelection | null>(null)
   const [reviewSuggestions, setReviewSuggestions] = useState<ReviewSuggestion[]>([])
@@ -182,6 +186,60 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
       title: `Page ${pages.length * 2 - 1}-${pages.length * 2}`,
     }
     setPages([...pages, newPage])
+  }
+
+  const goToPreviousPage = () => {
+    if (currentPageIndex > 0) {
+      setCurrentPageIndex(currentPageIndex - 1)
+    }
+  }
+
+  const goToNextPage = () => {
+    if (currentPageIndex < pages.length - 1) {
+      setCurrentPageIndex(currentPageIndex + 1)
+    }
+  }
+
+  // テキスト分割機能（小説モード用）
+  const splitNovelContent = (content: string): string[] => {
+    if (!content.trim()) return []
+    
+    const CHARS_PER_PAGE = 800 // 1ページあたりの文字数
+    const paragraphs = content.split('\n\n')
+    const pages: string[] = []
+    let currentPage = ""
+    
+    for (const paragraph of paragraphs) {
+      const paragraphWithBreak = paragraph + '\n\n'
+      
+      if (currentPage.length + paragraphWithBreak.length <= CHARS_PER_PAGE) {
+        currentPage += paragraphWithBreak
+      } else {
+        if (currentPage.trim()) {
+          pages.push(currentPage.trim())
+        }
+        currentPage = paragraphWithBreak
+      }
+    }
+    
+    if (currentPage.trim()) {
+      pages.push(currentPage.trim())
+    }
+    
+    return pages.length > 0 ? pages : [content]
+  }
+
+  // 小説モード用のページナビゲーション
+  const goToPreviousNovelPage = () => {
+    if (currentNovelPage > 1) {
+      setCurrentNovelPage(currentNovelPage - 1)
+    }
+  }
+
+  const goToNextNovelPage = () => {
+    if (currentNovelPage < Math.max(1, Math.ceil(novelPages.length / 2))) {
+      setCurrentNovelPage(currentNovelPage + 1)
+    }
   }
 
   const addTextElement = () => {
@@ -1074,6 +1132,10 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
     try {
       const result = await novelize({ concept, world, prompt })
       setNovelContent(result.text)
+      // テキストを複数ページに分割
+      const splitPages = splitNovelContent(result.text)
+      setNovelPages(splitPages)
+      setCurrentNovelPage(1) // 最初のページに戻る
       setMode("novel")
     } catch (error) {
       console.error("小説化エラー:", error)
@@ -1630,11 +1692,89 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
               {/* Header */}
               <div className="flex items-center justify-between p-6 border-b" style={{ borderColor: "rgba(139, 115, 85, 0.2)" }}>
                 <div className="flex items-center gap-4">
-                  <Button variant="ghost" size="sm" onClick={onBack} className="hover:bg-amber-100" style={{ color: "#8b7355" }}>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={mode === "novel" ? () => setMode("zine") : onBack} 
+                    className="hover:bg-amber-100" 
+                    style={{ color: "#8b7355" }}
+                  >
                     <ArrowLeft className="w-4 h-4 mr-2" />
                     戻る
                   </Button>
                   <h1 className="text-xl font-semibold" style={{ color: "#4a3c28" }}>{mode === "zine" ? "ZINE作成" : "小説編集"}</h1>
+                  
+                  {/* Page Navigation */}
+                  {mode === "zine" && (
+                    <div className="flex items-center gap-2 ml-6">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={goToPreviousPage}
+                        disabled={currentPageIndex === 0}
+                        className="hover:bg-amber-100"
+                        style={{ color: currentPageIndex === 0 ? "#ccc" : "#8b7355" }}
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </Button>
+                      
+                      <span className="text-sm px-3" style={{ color: "#8b7355" }}>
+                        ページ {currentPageIndex + 1} / {pages.length}
+                      </span>
+                      
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={goToNextPage}
+                        disabled={currentPageIndex === pages.length - 1}
+                        className="hover:bg-amber-100"
+                        style={{ color: currentPageIndex === pages.length - 1 ? "#ccc" : "#8b7355" }}
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                      
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={addPage}
+                        className="hover:bg-amber-100 ml-2"
+                        style={{ color: "#8b7355" }}
+                      >
+                        <Plus className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  )}
+                  
+                  {/* Novel Page Navigation */}
+                  {mode === "novel" && novelPages.length > 0 && (
+                    <div className="flex items-center gap-2 ml-6">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={goToPreviousNovelPage}
+                        disabled={currentNovelPage === 1}
+                        className="hover:bg-amber-100"
+                        style={{ color: currentNovelPage === 1 ? "#ccc" : "#8b7355" }}
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </Button>
+                      
+                      <span className="text-sm px-3" style={{ color: "#8b7355" }}>
+                        見開き {currentNovelPage} / {Math.ceil(novelPages.length / 2)}
+                      </span>
+                      
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={goToNextNovelPage}
+                        disabled={currentNovelPage >= Math.ceil(novelPages.length / 2)}
+                        className="hover:bg-amber-100"
+                        style={{ color: currentNovelPage >= Math.ceil(novelPages.length / 2) ? "#ccc" : "#8b7355" }}
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -2013,7 +2153,7 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
                             {/* Left page with page number */}
                             <div className="w-1/2 pr-4 relative">
                               <div className="absolute top-6 left-6 text-xs" style={{ color: "#a0896c", fontFamily: "serif" }}>Chapter 1</div>
-                              <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 text-xs" style={{ color: "#a0896c", fontFamily: "serif" }}>2</div>
+                              <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 text-xs" style={{ color: "#a0896c", fontFamily: "serif" }}>{currentNovelPage * 2}</div>
                               <div className="px-12 py-20 h-full">
                                 <div
                                   className="text-base leading-8 whitespace-pre-wrap cursor-text"
@@ -2025,8 +2165,8 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
                                   }}
                                   onMouseUp={handleTextSelection}
                                 >
-                                  {novelContent
-                                    ? renderTextWithSuggestions(novelContent)
+                                  {novelPages.length > 0 
+                                    ? renderTextWithSuggestions(novelPages[(currentNovelPage - 1) * 2] || "")
                                     : renderTextWithSuggestions(`　夕暮れの街角で、彼女は立ち止まった。オレンジ色の光が建物の窓を染め、遠くから聞こえる車の音が都市の鼓動のように響いている。
 
 　「もう戻れないのね」
@@ -2038,7 +2178,7 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
 
                             {/* Right page with page number */}
                             <div className="w-1/2 pl-4 relative">
-                              <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 text-xs" style={{ color: "#a0896c", fontFamily: "serif" }}>3</div>
+                              <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 text-xs" style={{ color: "#a0896c", fontFamily: "serif" }}>{currentNovelPage * 2 + 1}</div>
                               <div className="px-12 py-20 h-full">
                                 <div
                                   className="text-base leading-8 whitespace-pre-wrap"
@@ -2049,7 +2189,9 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
                                     textShadow: "0 1px 2px rgba(0,0,0,0.05)",
                                   }}
                                 >
-                                  {`　角の向こうから現れた猫が、彼女の足元で鳴いた。まるで何かを伝えようとするように。
+                                  {novelPages.length > 0 
+                                    ? novelPages[(currentNovelPage - 1) * 2 + 1] || ""
+                                    : `　角の向こうから現れた猫が、彼女の足元で鳴いた。まるで何かを伝えようとするように。
 
 　「あなたも一人なのね」
 

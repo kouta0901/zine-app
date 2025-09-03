@@ -1,72 +1,55 @@
 substitutions:
   _REGION: "asia-northeast1"
   _REPO: "zine-repo"
+  _WEB_SERVICE: "web"
+  _API_SERVICE: "api"
 
 steps:
-  # Build Frontend (Web)
-  - name: gcr.io/cloud-builders/docker
-    args: ["build",
-           "-t","${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/web:$SHORT_SHA",
-           "-f","zine-app/Dockerfile",
-           "zine-app"]
-    id: "build-web"
+# 1) API を build & push
+- name: gcr.io/cloud-builders/docker
+  args: ["build","-t","${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_API_SERVICE}:latest","api"]
+- name: gcr.io/cloud-builders/docker
+  args: ["push","${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_API_SERVICE}:latest"]
 
-  # Build API
-  - name: gcr.io/cloud-builders/docker
-    args: ["build",
-           "-t","${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/api:$SHORT_SHA",
-           "-f","api/Dockerfile", 
-           "api"]
-    id: "build-api"
+# 2) API を Cloud Run にデプロイ（初回でもOK）
+- name: gcr.io/google.com/cloudsdktool/cloud-sdk
+  entrypoint: gcloud
+  args:
+    ["run","deploy","${_API_SERVICE}",
+     "--image","${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_API_SERVICE}:latest",
+     "--region","${_REGION}",
+     "--platform","managed",
+     "--set-env-vars","GOOGLE_CLOUD_LOCATION=${_REGION},COVER_BUCKET=vital-analogy-470911-t0-covers",
+     "--allow-unauthenticated",
+     "--quiet"]
 
-  # Push Frontend
-  - name: gcr.io/cloud-builders/docker
-    args: ["push","${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/web:$SHORT_SHA"]
-    waitFor: ["build-web"]
+# 3) API の URL を取得して .env.production を生成（フロントに焼き込む）
+- name: gcr.io/google.com/cloudsdktool/cloud-sdk
+  entrypoint: bash
+  args:
+    - "-c"
+    - |
+      API_URL=$$(gcloud run services describe ${_API_SERVICE} --region ${_REGION} --format="value(status.url)")
+      echo "NEXT_PUBLIC_API_BASE=$$API_URL" > zine-app/.env.production
+      echo "Wrote zine-app/.env.production with $$API_URL"
 
-  # Push API
-  - name: gcr.io/cloud-builders/docker
-    args: ["push","${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/api:$SHORT_SHA"]
-    waitFor: ["build-api"]
+# 4) フロントを build & push （.env.production をバンドル）
+- name: gcr.io/cloud-builders/docker
+  args: ["build","-t","${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_WEB_SERVICE}:latest","zine-app"]
+- name: gcr.io/cloud-builders/docker
+  args: ["push","${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_WEB_SERVICE}:latest"]
 
-  # Deploy Frontend to Cloud Run
-  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: gcloud
-    args:
-      ["run","deploy","web",
-       "--image","${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/web:$SHORT_SHA",
-       "--region","${_REGION}",
-       "--platform","managed",
-       "--allow-unauthenticated",
-       "--quiet"]
-    waitFor: ["build-web"]
-
-  # Deploy API to Cloud Run
-  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: gcloud
-    args:
-      ["run","deploy","api",
-       "--image","${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/api:$SHORT_SHA",
-       "--region","${_REGION}",
-       "--platform","managed",
-       "--set-env-vars","GOOGLE_CLOUD_LOCATION=${_REGION},COVER_BUCKET=vital-analogy-470911-t0-covers",
-       "--allow-unauthenticated",
-       "--quiet"]
-    waitFor: ["build-api"]
-
-  # Update Frontend Environment Variable (API URL)
-  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: bash
-    args:
-      - "-c"
-      - |
-        API_URL=$$(gcloud run services describe api --region=${_REGION} --format='value(status.url)')
-        gcloud run services update web \
-          --region=${_REGION} \
-          --set-env-vars="NEXT_PUBLIC_API_BASE=$$API_URL" \
-          --quiet
-    waitFor: ["api", "web"]
+# 5) フロントを Cloud Run にデプロイ
+- name: gcr.io/google.com/cloudsdktool/cloud-sdk
+  entrypoint: gcloud
+  args:
+    ["run","deploy","${_WEB_SERVICE}",
+     "--image","${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_WEB_SERVICE}:latest",
+     "--region","${_REGION}",
+     "--platform","managed",
+     "--allow-unauthenticated",
+     "--quiet"]
 
 images:
-  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/web:$SHORT_SHA"
-  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/api:$SHORT_SHA"
+- "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_API_SERVICE}:latest"
+- "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_WEB_SERVICE}:latest"
