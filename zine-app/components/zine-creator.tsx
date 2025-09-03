@@ -102,6 +102,9 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
   const [bookTheme, setBookTheme] = useState<"light" | "sepia" | "dark">("light")
   const [currentNovelPage, setCurrentNovelPage] = useState(1)
   const [novelPages, setNovelPages] = useState<string[]>([])
+  const [editingElement, setEditingElement] = useState<string | null>(null)
+  const [tempTextContent, setTempTextContent] = useState("")
+  const [isDragOver, setIsDragOver] = useState(false)
 
   const [selectedText, setSelectedText] = useState<TextSelection | null>(null)
   const [reviewSuggestions, setReviewSuggestions] = useState<ReviewSuggestion[]>([])
@@ -120,9 +123,10 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
 
   const currentPage = pages[currentPageIndex]
 
-  // Handle mouse move for dragging
+  // Handle mouse move for dragging (optimized for performance)
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (draggedElement && canvasRef.current) {
+    if (draggedElement && canvasRef.current && !editingElement) {
+      e.preventDefault()
       const canvasRect = canvasRef.current.getBoundingClientRect()
       const newX = e.clientX - canvasRect.left - dragOffset.x
       const newY = e.clientY - canvasRect.top - dragOffset.y
@@ -133,9 +137,84 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
         const constrainedX = Math.max(0, Math.min(newX, canvasRect.width - element.width))
         const constrainedY = Math.max(0, Math.min(newY, canvasRect.height - element.height))
         
-        updateElement(draggedElement, { x: constrainedX, y: constrainedY })
+        // Use requestAnimationFrame for smoother performance
+        requestAnimationFrame(() => {
+          updateElement(draggedElement, { x: constrainedX, y: constrainedY })
+        })
       }
     }
+  }
+
+  // Start text editing
+  const startTextEditing = (elementId: string, currentContent: string) => {
+    setEditingElement(elementId)
+    setTempTextContent(currentContent || "")
+  }
+
+  // Finish text editing
+  const finishTextEditing = () => {
+    if (editingElement && tempTextContent.trim()) {
+      updateElement(editingElement, { content: tempTextContent })
+    }
+    setEditingElement(null)
+    setTempTextContent("")
+  }
+
+  // Cancel text editing
+  const cancelTextEditing = () => {
+    setEditingElement(null)
+    setTempTextContent("")
+  }
+
+  // Drag & drop handlers for image upload
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = "copy"
+    setIsDragOver(true)
+  }
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    // Only hide drag overlay if we're leaving the canvas completely
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setIsDragOver(false)
+    }
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(false)
+    
+    const files = Array.from(e.dataTransfer.files)
+    const imageFiles = files.filter(file => file.type.startsWith('image/'))
+    
+    imageFiles.forEach((file, index) => {
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          // Calculate drop position relative to canvas
+          const canvasRect = canvasRef.current?.getBoundingClientRect()
+          if (canvasRect) {
+            const x = Math.max(0, Math.min(e.clientX - canvasRect.left - 50, canvasRect.width - 100))
+            const y = Math.max(0, Math.min(e.clientY - canvasRect.top - 50 + (index * 20), canvasRect.height - 100))
+            
+            addElement("image", {
+              x,
+              y,
+              width: 100,
+              height: 100,
+              content: event.target.result as string
+            })
+          }
+        }
+      }
+      reader.readAsDataURL(file)
+    })
   }
   const isCoverPage = false
 
@@ -1601,22 +1680,135 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
                       </div>
                     </div>
 
-                    {selectedElement && (
-                      <div className="mt-6 pt-6 border-t" style={{ borderColor: "rgba(139, 115, 85, 0.3)" }}>
-                        <h3 className="text-sm font-semibold mb-3" style={{ color: "#4a3c28" }}>選択中の要素</h3>
-                        <div className="space-y-2">
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            className="w-full"
-                            onClick={() => deleteElement(selectedElement)}
-                          >
-                            <X className="w-4 h-4 mr-2" />
-                            削除
-                          </Button>
+                    {selectedElement && (() => {
+                      const element = currentPage.elements.find(el => el.id === selectedElement)
+                      return element && (
+                        <div className="mt-6 pt-6 border-t" style={{ borderColor: "rgba(139, 115, 85, 0.3)" }}>
+                          <h3 className="text-sm font-semibold mb-3" style={{ color: "#4a3c28" }}>選択中の要素</h3>
+                          <div className="space-y-4">
+                            
+                            {/* Size Controls */}
+                            <div>
+                              <label className="block text-xs font-medium mb-2" style={{ color: "#4a3c28" }}>サイズ</label>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="block text-xs mb-1" style={{ color: "#8b7355" }}>幅</label>
+                                  <input
+                                    type="number"
+                                    min="20"
+                                    max="500"
+                                    value={element.width}
+                                    onChange={(e) => updateElement(element.id, { width: parseInt(e.target.value) || element.width })}
+                                    className="w-full text-xs p-2 border rounded"
+                                    style={{
+                                      background: "rgba(255, 253, 250, 0.8)",
+                                      borderColor: "rgba(139, 115, 85, 0.3)",
+                                      color: "#4a3c28"
+                                    }}
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs mb-1" style={{ color: "#8b7355" }}>高さ</label>
+                                  <input
+                                    type="number"
+                                    min="20"
+                                    max="500"
+                                    value={element.height}
+                                    onChange={(e) => updateElement(element.id, { height: parseInt(e.target.value) || element.height })}
+                                    className="w-full text-xs p-2 border rounded"
+                                    style={{
+                                      background: "rgba(255, 253, 250, 0.8)",
+                                      borderColor: "rgba(139, 115, 85, 0.3)",
+                                      color: "#4a3c28"
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Text-specific Controls */}
+                            {element.type === "text" && (
+                              <>
+                                <div>
+                                  <label className="block text-xs font-medium mb-2" style={{ color: "#4a3c28" }}>文字サイズ</label>
+                                  <input
+                                    type="range"
+                                    min="8"
+                                    max="48"
+                                    value={element.fontSize || 16}
+                                    onChange={(e) => updateElement(element.id, { fontSize: parseInt(e.target.value) })}
+                                    className="w-full"
+                                  />
+                                  <div className="text-xs text-center mt-1" style={{ color: "#8b7355" }}>
+                                    {element.fontSize || 16}px
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <label className="block text-xs font-medium mb-2" style={{ color: "#4a3c28" }}>文字色</label>
+                                  <input
+                                    type="color"
+                                    value={element.color || "#000000"}
+                                    onChange={(e) => updateElement(element.id, { color: e.target.value })}
+                                    className="w-full h-8 border rounded"
+                                    style={{
+                                      borderColor: "rgba(139, 115, 85, 0.3)",
+                                    }}
+                                  />
+                                </div>
+                              </>
+                            )}
+
+                            {/* Position Controls */}
+                            <div>
+                              <label className="block text-xs font-medium mb-2" style={{ color: "#4a3c28" }}>位置</label>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="block text-xs mb-1" style={{ color: "#8b7355" }}>X</label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={Math.round(element.x)}
+                                    onChange={(e) => updateElement(element.id, { x: parseInt(e.target.value) || element.x })}
+                                    className="w-full text-xs p-2 border rounded"
+                                    style={{
+                                      background: "rgba(255, 253, 250, 0.8)",
+                                      borderColor: "rgba(139, 115, 85, 0.3)",
+                                      color: "#4a3c28"
+                                    }}
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs mb-1" style={{ color: "#8b7355" }}>Y</label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={Math.round(element.y)}
+                                    onChange={(e) => updateElement(element.id, { y: parseInt(e.target.value) || element.y })}
+                                    className="w-full text-xs p-2 border rounded"
+                                    style={{
+                                      background: "rgba(255, 253, 250, 0.8)",
+                                      borderColor: "rgba(139, 115, 85, 0.3)",
+                                      color: "#4a3c28"
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              className="w-full"
+                              onClick={() => deleteElement(selectedElement)}
+                            >
+                              <X className="w-4 h-4 mr-2" />
+                              削除
+                            </Button>
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )
+                    })()}
                   </>
                 )}
 
@@ -1853,18 +2045,25 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
                       />
 
                       {/* ZINE Pages Container */}
-                      <div className="absolute inset-0 flex items-center justify-center p-8">
+                      <div className="absolute inset-0 flex items-center justify-center p-4">
                         <motion.div
                           ref={canvasRef}
                           className="relative rounded-xl overflow-hidden"
                           style={{
-                            width: 800,
-                            height: 600,
+                            width: "calc(100% - 2rem)",
+                            height: "calc(100% - 2rem)",
+                            maxWidth: 1200,
+                            maxHeight: 800,
+                            aspectRatio: "3/2",
                             filter: "drop-shadow(0 25px 50px rgba(0,0,0,0.4))",
                           }}
                           initial={{ opacity: 0, y: 20 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: 0.2, duration: 0.6 }}
+                          onDragOver={handleDragOver}
+                          onDragEnter={handleDragEnter}
+                          onDragLeave={handleDragLeave}
+                          onDrop={handleDrop}
                         >
                           {/* Paper texture background with subtle shadows */}
                           <div
@@ -1914,13 +2113,14 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
                                   height: element.height,
                                   zIndex: draggedElement === element.id ? 1000 : 1,
                                 }}
-                                onClick={() => setSelectedElement(element.id)}
+                                onClick={() => {
+                                  if (editingElement !== element.id) {
+                                    setSelectedElement(element.id)
+                                  }
+                                }}
                                 onDoubleClick={() => {
                                   if (element.type === "text") {
-                                    const newContent = prompt("テキストを編集:", element.content || "")
-                                    if (newContent !== null) {
-                                      updateElement(element.id, { content: newContent })
-                                    }
+                                    startTextEditing(element.id, element.content || "")
                                   }
                                 }}
                                 onMouseDown={(e) => {
@@ -1938,16 +2138,45 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
                                 }}
                               >
                                 {element.type === "text" && (
-                                  <div
-                                    className="w-full h-full flex items-center justify-center p-3 bg-white/90 rounded-lg shadow-sm border border-gray-200"
-                                    style={{
-                                      fontSize: element.fontSize,
-                                      color: element.color,
-                                      fontWeight: "500",
-                                    }}
-                                  >
-                                    {element.content}
-                                  </div>
+                                  <>
+                                    {editingElement === element.id ? (
+                                      <textarea
+                                        className="w-full h-full p-3 bg-white rounded-lg shadow-sm border-2 border-blue-400 resize-none"
+                                        style={{
+                                          fontSize: element.fontSize,
+                                          color: element.color,
+                                          fontWeight: "500",
+                                          fontFamily: "inherit",
+                                        }}
+                                        value={tempTextContent}
+                                        onChange={(e) => setTempTextContent(e.target.value)}
+                                        onBlur={finishTextEditing}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter' && !e.shiftKey) {
+                                            e.preventDefault()
+                                            finishTextEditing()
+                                          }
+                                          if (e.key === 'Escape') {
+                                            e.preventDefault()
+                                            cancelTextEditing()
+                                          }
+                                        }}
+                                        autoFocus
+                                        placeholder="テキストを入力..."
+                                      />
+                                    ) : (
+                                      <div
+                                        className="w-full h-full flex items-center justify-center p-3 bg-white/90 rounded-lg shadow-sm border border-gray-200"
+                                        style={{
+                                          fontSize: element.fontSize,
+                                          color: element.color,
+                                          fontWeight: "500",
+                                        }}
+                                      >
+                                        {element.content || "ダブルクリックで編集"}
+                                      </div>
+                                    )}
+                                  </>
                                 )}
                                 {element.type === "image" && (
                                   <img
@@ -1982,6 +2211,33 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
                                   <div className="text-center text-gray-400">
                                     <div className="text-lg font-medium mb-2">右ページ</div>
                                     <div className="text-sm opacity-70">テキストや画像をドラッグ&ドロップ</div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Drag & Drop Overlay */}
+                            {isDragOver && (
+                              <div 
+                                className="absolute inset-0 flex items-center justify-center z-50 rounded-xl"
+                                style={{
+                                  background: "rgba(139, 105, 20, 0.1)",
+                                  border: "2px dashed rgba(139, 105, 20, 0.5)",
+                                  backdropFilter: "blur(4px)"
+                                }}
+                              >
+                                <div className="text-center">
+                                  <div 
+                                    className="text-2xl font-bold mb-2"
+                                    style={{ color: "#8b6914" }}
+                                  >
+                                    📷 画像をドロップしてください
+                                  </div>
+                                  <div 
+                                    className="text-sm"
+                                    style={{ color: "#a0751f" }}
+                                  >
+                                    JPG, PNG, GIFファイルに対応
                                   </div>
                                 </div>
                               </div>
