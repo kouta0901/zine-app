@@ -25,7 +25,7 @@ import {
   Plus,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { novelize, review } from "@/lib/api"
+import { novelize, review, saveZine, updateZine } from "@/lib/api"
 
 interface ZineCreatorProps {
   onBack: () => void
@@ -121,6 +121,20 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
   const [reviewChatInput, setReviewChatInput] = useState("")
 
   const [inlineSuggestions, setInlineSuggestions] = useState<{ [key: string]: ReviewSuggestion }>({})
+
+  // 保存機能の状態変数
+  const [savedZineId, setSavedZineId] = useState<string | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+  const [lastSaved, setLastSaved] = useState<Date | null>(null)
+
+  // 修正機能の状態変数
+  const [pendingModification, setPendingModification] = useState<{
+    type: 'style' | 'onepoint'
+    original: string
+    modified: string
+    instruction: string
+  } | null>(null)
+  const [isApplyingModification, setIsApplyingModification] = useState(false)
 
   const currentPage = pages[currentPageIndex]
 
@@ -794,6 +808,49 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
     setReviewChatInput("")
   }
 
+  // ZINE保存機能
+  const handleSaveZine = async () => {
+    if (!zineTitle.trim()) {
+      alert("タイトルを入力してください");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const zineData = {
+        id: savedZineId,
+        title: zineTitle,
+        status: mode === "novel" ? "novel" : "draft",
+        conceptConfig,
+        aiWriterConfig,
+        worldConfig: worldviewConfig,
+        pages,
+        novelContent,
+        novelPages,
+        createdAt: savedZineId ? undefined : new Date().toISOString(), // Only set if new
+        description: `${zineTitle} - ${mode === "novel" ? "小説" : "ZINE"}`
+      };
+
+      if (savedZineId) {
+        // Update existing ZINE
+        await updateZine(savedZineId, zineData);
+        alert("ZINEが更新されました！");
+      } else {
+        // Save new ZINE
+        const response = await saveZine(zineData);
+        setSavedZineId(response.id);
+        alert("ZINEが保存されました！");
+      }
+
+      setLastSaved(new Date());
+    } catch (error) {
+      console.error("保存エラー:", error);
+      alert("保存に失敗しました。もう一度お試しください。");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   const applyInlineSuggestion = (originalText: string) => {
     const suggestion = inlineSuggestions[originalText]
     if (suggestion) {
@@ -1005,32 +1062,62 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
     "ドラマチックに",
   ]
 
-  // 文体を小説全体に適用する関数
-  const applyStyleToNovel = async (text: string, style: string): Promise<string> => {
+  // 文体修正プレビューを生成する関数
+  const previewStyleToNovel = async (text: string, style: string) => {
     try {
       const result = await review({
         original: text,
         instruction: `この小説全体の文体を「${style}」変更してください。内容は維持し、文体のみを変更してください。`
       })
-      return result.text
+      setPendingModification({
+        type: 'style',
+        original: text,
+        modified: result.text,
+        instruction: `文体を「${style}」に変更`
+      })
     } catch (error) {
-      console.error("文体適用エラー:", error)
-      throw error
+      console.error("文体プレビューエラー:", error)
+      alert("文体修正のプレビュー生成に失敗しました。")
     }
   }
 
-  // ワンポイントを小説全体に適用する関数
-  const applyOnepointToNovel = async (text: string, adjustment: string): Promise<string> => {
+  // ワンポイント修正プレビューを生成する関数
+  const previewOnepointToNovel = async (text: string, adjustment: string) => {
     try {
       const result = await review({
         original: text,
         instruction: `この小説全体を「${adjustment}」という雰囲気に調整してください。内容は維持し、トーンや雰囲気のみを調整してください。`
       })
-      return result.text
+      setPendingModification({
+        type: 'onepoint',
+        original: text,
+        modified: result.text,
+        instruction: `雰囲気を「${adjustment}」に調整`
+      })
     } catch (error) {
-      console.error("ワンポイント適用エラー:", error)
-      throw error
+      console.error("ワンポイントプレビューエラー:", error)
+      alert("ワンポイント修正のプレビュー生成に失敗しました。")
     }
+  }
+
+  // 修正を適用する関数
+  const applyModification = () => {
+    if (!pendingModification) return
+    
+    setIsApplyingModification(true)
+    setNovelContent(pendingModification.modified)
+    
+    // Split the modified text into pages
+    const newPages = splitNovelContent(pendingModification.modified)
+    setNovelPages(newPages)
+    
+    setPendingModification(null)
+    setIsApplyingModification(false)
+  }
+
+  // 修正をキャンセルする関数
+  const cancelModification = () => {
+    setPendingModification(null)
   }
 
   const renderStylePanel = () => (
@@ -1050,19 +1137,13 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
                 const newMessage = { role: "user" as const, content: `文体を「${option}」に変更してください` }
                 setStyleMessages([...styleMessages, newMessage])
                 
-                // Apply style to entire novel
+                // Generate style preview
                 try {
-                  // Call API with entire novel text
-                  const styledText = await applyStyleToNovel(novelContent, option)
-                  setNovelContent(styledText)
-                  
-                  // Split the styled text into pages
-                  const newPages = splitNovelContent(styledText)
-                  setNovelPages(newPages)
+                  await previewStyleToNovel(novelContent, option)
                   
                   const aiResponse = {
                     role: "assistant" as const,
-                    content: `小説全体を「${option}」の文体に変更しました。`,
+                    content: `文体を「${option}」に変更するプレビューを生成しました。下記の修正案をご確認ください。`,
                   }
                   setStyleMessages((prev) => [...prev, aiResponse])
                 } catch (error) {
@@ -1166,19 +1247,13 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
                 const newMessage = { role: "user" as const, content: `小説を「${option}」調整してください` }
                 setOnepointMessages([...onepointMessages, newMessage])
                 
-                // Apply adjustment to entire novel
+                // Generate onepoint preview
                 try {
-                  // Call API with entire novel text
-                  const adjustedText = await applyOnepointToNovel(novelContent, option)
-                  setNovelContent(adjustedText)
-                  
-                  // Split the adjusted text into pages
-                  const newPages = splitNovelContent(adjustedText)
-                  setNovelPages(newPages)
+                  await previewOnepointToNovel(novelContent, option)
                   
                   const aiResponse = {
                     role: "assistant" as const,
-                    content: `小説全体を「${option}」雰囲気に調整しました。`,
+                    content: `雰囲気を「${option}」に調整するプレビューを生成しました。下記の修正案をご確認ください。`,
                   }
                   setOnepointMessages((prev) => [...prev, aiResponse])
                 } catch (error) {
@@ -2050,7 +2125,25 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
                     <ArrowLeft className="w-4 h-4 mr-2" />
                     戻る
                   </Button>
-                  <h1 className="text-xl font-semibold" style={{ color: "#4a3c28" }}>{mode === "zine" ? "ZINE作成" : "小説編集"}</h1>
+                  <div className="flex items-center gap-3">
+                    <h1 className="text-xl font-semibold" style={{ color: "#4a3c28" }}>{mode === "zine" ? "ZINE作成" : "小説編集"}</h1>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm" style={{ color: "#8b7355" }}>タイトル:</span>
+                      <input
+                        type="text"
+                        value={zineTitle}
+                        onChange={(e) => setZineTitle(e.target.value)}
+                        placeholder="作品のタイトルを入力..."
+                        className="px-2 py-1 text-sm border rounded"
+                        style={{
+                          background: "rgba(255, 253, 250, 0.8)",
+                          borderColor: "rgba(139, 115, 85, 0.3)",
+                          color: "#4a3c28",
+                          minWidth: "200px"
+                        }}
+                      />
+                    </div>
+                  </div>
                   
                   {/* Page Navigation */}
                   {mode === "zine" && (
@@ -2139,11 +2232,17 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
                     <Eye className="w-4 h-4 mr-2" />
                     {isPreview ? "編集" : "プレビュー"}
                   </Button>
-                  <Button size="sm" className="text-white" style={{
-                    background: "linear-gradient(135deg, #8b6914 0%, #a0751f 100%)"
-                  }}>
+                  <Button 
+                    size="sm" 
+                    className="text-white" 
+                    onClick={handleSaveZine}
+                    disabled={isSaving}
+                    style={{
+                      background: isSaving ? "rgba(139, 105, 20, 0.5)" : "linear-gradient(135deg, #8b6914 0%, #a0751f 100%)"
+                    }}
+                  >
                     <Save className="w-4 h-4 mr-2" />
-                    保存
+                    {isSaving ? "保存中..." : "保存"}
                   </Button>
                 </div>
               </div>
@@ -2616,6 +2715,100 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
                       </div>
                     </motion.div>
                   </div>
+                )}
+
+                {/* Modification Preview Section */}
+                {mode === "novel" && pendingModification && (
+                  <motion.div
+                    className="mt-8 p-6 rounded-xl border"
+                    style={{
+                      background: "rgba(255, 245, 238, 0.8)",
+                      borderColor: "rgba(220, 38, 127, 0.3)",
+                    }}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-bold" style={{ color: "#4a3c28" }}>
+                        修正プレビュー
+                      </h3>
+                      <span className="text-sm px-2 py-1 rounded-full bg-red-100" style={{ color: "#dc2626" }}>
+                        {pendingModification.instruction}
+                      </span>
+                    </div>
+                    
+                    <div className="space-y-6">
+                      {/* Before section */}
+                      <div>
+                        <h4 className="text-sm font-semibold mb-2" style={{ color: "#8b7355" }}>
+                          現在の文章
+                        </h4>
+                        <div 
+                          className="p-4 rounded-lg border text-sm leading-relaxed whitespace-pre-wrap"
+                          style={{
+                            background: "rgba(247, 241, 232, 0.5)",
+                            borderColor: "rgba(139, 115, 85, 0.2)",
+                            color: "#6b5b47",
+                            fontFamily: 'Georgia, "Times New Roman", serif',
+                            maxHeight: "200px",
+                            overflowY: "auto"
+                          }}
+                        >
+                          {pendingModification.original.substring(0, 500)}
+                          {pendingModification.original.length > 500 && "..."}
+                        </div>
+                      </div>
+                      
+                      {/* After section */}
+                      <div>
+                        <h4 className="text-sm font-semibold mb-2" style={{ color: "#dc2626" }}>
+                          修正後の文章
+                        </h4>
+                        <div 
+                          className="p-4 rounded-lg border text-sm leading-relaxed whitespace-pre-wrap"
+                          style={{
+                            background: "rgba(254, 242, 242, 0.8)",
+                            borderColor: "rgba(220, 38, 127, 0.3)",
+                            color: "#dc2626",
+                            fontFamily: 'Georgia, "Times New Roman", serif',
+                            maxHeight: "200px",
+                            overflowY: "auto"
+                          }}
+                        >
+                          {pendingModification.modified.substring(0, 500)}
+                          {pendingModification.modified.length > 500 && "..."}
+                        </div>
+                      </div>
+                      
+                      {/* Action buttons */}
+                      <div className="flex items-center justify-end gap-3">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={cancelModification}
+                          className="hover:bg-gray-100"
+                          style={{ 
+                            borderColor: "rgba(139, 115, 85, 0.3)",
+                            color: "#8b7355"
+                          }}
+                        >
+                          キャンセル
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={applyModification}
+                          disabled={isApplyingModification}
+                          className="text-white"
+                          style={{
+                            background: "linear-gradient(135deg, #dc2626 0%, #ef4444 100%)"
+                          }}
+                        >
+                          {isApplyingModification ? "適用中..." : "適用する"}
+                        </Button>
+                      </div>
+                    </div>
+                  </motion.div>
                 )}
               </div>
             </>

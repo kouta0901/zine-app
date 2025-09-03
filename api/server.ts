@@ -22,6 +22,7 @@ const vertexAI = new VertexAI({
 // Initialize Cloud Storage
 const storage = new Storage();
 const bucketName = process.env.COVER_BUCKET || "vital-analogy-470911-t0-covers";
+const zinesBucketName = process.env.ZINES_BUCKET || "vital-analogy-470911-t0-zines";
 
 // Health check endpoint
 app.get("/healthz", (_, res) => {
@@ -148,6 +149,176 @@ app.post("/embed", async (req, res) => {
   } catch (error) {
     console.error("Embedding error:", error);
     res.status(500).json({ error: "Failed to generate embeddings" });
+  }
+});
+
+// ZINE保存・管理エンドポイント
+
+// 5. ZINE保存エンドポイント
+app.post("/zines", async (req, res) => {
+  try {
+    const zineData = req.body;
+    
+    if (!zineData || !zineData.title) {
+      return res.status(400).json({ error: "ZINE data with title is required" });
+    }
+
+    // Generate unique ID if not provided
+    const zineId = zineData.id || `zine_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Add metadata
+    const savedZine = {
+      ...zineData,
+      id: zineId,
+      updatedAt: new Date().toISOString(),
+      createdAt: zineData.createdAt || new Date().toISOString()
+    };
+
+    // Save to Cloud Storage as JSON file
+    const fileName = `zines/${zineId}.json`;
+    const file = storage.bucket(zinesBucketName).file(fileName);
+    
+    await file.save(JSON.stringify(savedZine, null, 2), {
+      metadata: {
+        contentType: 'application/json',
+      },
+    });
+
+    console.log(`ZINE saved: ${zineId}`);
+    res.json({ id: zineId, message: "ZINE saved successfully" });
+  } catch (error) {
+    console.error("ZINE save error:", error);
+    res.status(500).json({ error: "Failed to save ZINE" });
+  }
+});
+
+// 6. ZINE一覧取得エンドポイント
+app.get("/zines", async (req, res) => {
+  try {
+    const [files] = await storage.bucket(zinesBucketName).getFiles({
+      prefix: 'zines/',
+      delimiter: '/'
+    });
+
+    const zines = [];
+    
+    for (const file of files) {
+      if (file.name.endsWith('.json')) {
+        try {
+          const [content] = await file.download();
+          const zineData = JSON.parse(content.toString());
+          
+          // Return only metadata for list view
+          zines.push({
+            id: zineData.id,
+            title: zineData.title,
+            status: zineData.status,
+            createdAt: zineData.createdAt,
+            updatedAt: zineData.updatedAt,
+            description: zineData.description,
+            thumbnail: zineData.thumbnail
+          });
+        } catch (parseError) {
+          console.error(`Error parsing ZINE file ${file.name}:`, parseError);
+        }
+      }
+    }
+
+    // Sort by updatedAt descending
+    zines.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    
+    res.json({ zines });
+  } catch (error) {
+    console.error("ZINE list error:", error);
+    res.status(500).json({ error: "Failed to retrieve ZINE list" });
+  }
+});
+
+// 7. 特定ZINE取得エンドポイント
+app.get("/zines/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    if (!id) {
+      return res.status(400).json({ error: "ZINE ID is required" });
+    }
+
+    const fileName = `zines/${id}.json`;
+    const file = storage.bucket(zinesBucketName).file(fileName);
+    
+    const [exists] = await file.exists();
+    if (!exists) {
+      return res.status(404).json({ error: "ZINE not found" });
+    }
+
+    const [content] = await file.download();
+    const zineData = JSON.parse(content.toString());
+    
+    res.json(zineData);
+  } catch (error) {
+    console.error("ZINE get error:", error);
+    res.status(500).json({ error: "Failed to retrieve ZINE" });
+  }
+});
+
+// 8. ZINE更新エンドポイント
+app.put("/zines/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const zineData = req.body;
+    
+    if (!id || !zineData) {
+      return res.status(400).json({ error: "ZINE ID and data are required" });
+    }
+
+    // Update timestamp
+    const updatedZine = {
+      ...zineData,
+      id,
+      updatedAt: new Date().toISOString()
+    };
+
+    const fileName = `zines/${id}.json`;
+    const file = storage.bucket(zinesBucketName).file(fileName);
+    
+    await file.save(JSON.stringify(updatedZine, null, 2), {
+      metadata: {
+        contentType: 'application/json',
+      },
+    });
+
+    console.log(`ZINE updated: ${id}`);
+    res.json({ id, message: "ZINE updated successfully" });
+  } catch (error) {
+    console.error("ZINE update error:", error);
+    res.status(500).json({ error: "Failed to update ZINE" });
+  }
+});
+
+// 9. ZINE削除エンドポイント
+app.delete("/zines/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    if (!id) {
+      return res.status(400).json({ error: "ZINE ID is required" });
+    }
+
+    const fileName = `zines/${id}.json`;
+    const file = storage.bucket(zinesBucketName).file(fileName);
+    
+    const [exists] = await file.exists();
+    if (!exists) {
+      return res.status(404).json({ error: "ZINE not found" });
+    }
+
+    await file.delete();
+    
+    console.log(`ZINE deleted: ${id}`);
+    res.json({ id, message: "ZINE deleted successfully" });
+  } catch (error) {
+    console.error("ZINE delete error:", error);
+    res.status(500).json({ error: "Failed to delete ZINE" });
   }
 });
 

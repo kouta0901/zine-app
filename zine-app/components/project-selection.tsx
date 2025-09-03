@@ -2,6 +2,8 @@
 
 import { motion } from "framer-motion"
 import { BookOpen, Zap, Eye, Plus, Sparkles, PenTool, Users } from "lucide-react"
+import { useState, useEffect } from "react"
+import { getZines } from "@/lib/api"
 
 interface ProjectSelectionProps {
   onStartWriting: (project: any) => void
@@ -60,6 +62,26 @@ const projectCards = [
 ]
 
 export function ProjectSelection({ onStartWriting, onViewZines }: ProjectSelectionProps) {
+  const [savedZines, setSavedZines] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+
+  // 保存済みZINE一覧を取得
+  useEffect(() => {
+    const fetchSavedZines = async () => {
+      setIsLoading(true)
+      try {
+        const response = await getZines()
+        setSavedZines(response.zines || [])
+      } catch (error) {
+        console.error("ZINE一覧の取得に失敗:", error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchSavedZines()
+  }, [])
+
   const handleCardClick = (card: (typeof projectCards)[0]) => {
     switch (card.action) {
       case "create":
@@ -77,6 +99,10 @@ export function ProjectSelection({ onStartWriting, onViewZines }: ProjectSelecti
         // TODO: Navigate to collaboration view
         break
     }
+  }
+
+  const handleContinueZine = (zine: any) => {
+    onStartWriting({ type: "continue", zineData: zine, title: zine.title })
   }
 
   return (
@@ -104,6 +130,64 @@ export function ProjectSelection({ onStartWriting, onViewZines }: ProjectSelecti
         </div>
         <p className="text-gray-400 text-lg">AIと一緒に、あなたの物語を形にしよう</p>
       </motion.div>
+
+      {/* Saved ZINEs Section */}
+      {savedZines.length > 0 && (
+        <motion.div
+          className="w-full max-w-6xl mb-12"
+          initial={{ y: 50, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.3, duration: 0.8 }}
+        >
+          <h2 className="text-2xl font-bold text-white mb-6">編集中の作品</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {savedZines.slice(0, 6).map((zine, index) => (
+              <motion.div
+                key={zine.id}
+                className="group relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 cursor-pointer overflow-hidden transition-all duration-300 hover:bg-white/10 hover:border-white/20"
+                initial={{ y: 30, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.1 * index, duration: 0.6 }}
+                whileHover={{ y: -4, scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => handleContinueZine(zine)}
+              >
+                {/* Status badge */}
+                <div className="absolute top-3 right-3">
+                  <span className={`px-2 py-1 text-xs rounded-full ${
+                    zine.status === 'novel' 
+                      ? 'bg-green-500/20 text-green-300' 
+                      : 'bg-yellow-500/20 text-yellow-300'
+                  }`}>
+                    {zine.status === 'novel' ? '小説' : 'ZINE'}
+                  </span>
+                </div>
+
+                {/* Title */}
+                <h3 className="text-lg font-bold text-white mb-2 pr-16">
+                  {zine.title}
+                </h3>
+
+                {/* Description */}
+                {zine.description && (
+                  <p className="text-gray-400 text-sm mb-3 line-clamp-2">
+                    {zine.description}
+                  </p>
+                )}
+
+                {/* Dates */}
+                <div className="text-xs text-gray-500 space-y-1">
+                  <div>作成: {new Date(zine.createdAt).toLocaleDateString('ja-JP')}</div>
+                  <div>更新: {new Date(zine.updatedAt).toLocaleDateString('ja-JP')}</div>
+                </div>
+
+                {/* Hover Effect */}
+                <div className="absolute bottom-0 right-0 w-24 h-24 bg-gradient-to-tl from-white/5 to-transparent rounded-full translate-x-12 translate-y-12 group-hover:translate-x-6 group-hover:translate-y-6 transition-transform duration-500" />
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+      )}
 
       {/* Project Cards Grid */}
       <motion.div

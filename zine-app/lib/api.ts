@@ -1,6 +1,6 @@
 // 一時的にハードコード（後で環境変数に戻す）
 // 注: 実際のデプロイされたAPI URLを使用
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'https://api-2be2c4ycca-an.a.run.app';
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'https://api-830716651527.asia-northeast1.run.app';
 
 // API呼び出し用のヘルパー関数
 async function apiCall(endpoint: string, payload: any) {
@@ -53,5 +53,60 @@ export async function embed(payload: {
 // APIの健康チェック
 export async function healthCheck(): Promise<{ ok: boolean; timestamp: string }> {
   const response = await fetch(`${API_BASE}/healthz`);
+  return response.json();
+}
+
+// ZINE保存・管理機能
+
+// ZINE保存
+export async function saveZine(zineData: any): Promise<{ id: string; message: string }> {
+  return apiCall("/zines", zineData);
+}
+
+// ZINE一覧取得
+export async function getZines(): Promise<{ zines: any[] }> {
+  const response = await fetch(`${API_BASE}/zines`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch ZINEs: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+// 特定ZINE取得
+export async function getZine(id: string): Promise<any> {
+  const response = await fetch(`${API_BASE}/zines/${id}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch ZINE: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+// ZINE更新
+export async function updateZine(id: string, zineData: any): Promise<{ id: string; message: string }> {
+  const response = await fetch(`${API_BASE}/zines/${id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(zineData),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to update ZINE: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+// ZINE削除
+export async function deleteZine(id: string): Promise<{ id: string; message: string }> {
+  const response = await fetch(`${API_BASE}/zines/${id}`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to delete ZINE: ${response.statusText}`);
+  }
+
   return response.json();
 }
