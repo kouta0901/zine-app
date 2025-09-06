@@ -97,7 +97,7 @@ export function ZineToolbar({
                   <ChevronLeft className="w-4 h-4" />
                 </Button>
                 
-                <span className="text-sm px-3" style={{ color: "#8b7355" }}>
+                <span className="text-sm px-3 whitespace-nowrap" style={{ color: "#8b7355", writingMode: "horizontal-tb" }}>
                   ページ {currentPageIndex + 1} / {totalPages}
                 </span>
                 
@@ -140,7 +140,7 @@ export function ZineToolbar({
                   <ChevronLeft className="w-4 h-4" />
                 </Button>
                 
-                <span className="text-sm px-3" style={{ color: "#8b7355" }}>
+                <span className="text-sm px-3 whitespace-nowrap" style={{ color: "#8b7355", writingMode: "horizontal-tb" }}>
                   見開き {currentNovelPage} / {Math.ceil(totalNovelPages / 2)}
                 </span>
                 
