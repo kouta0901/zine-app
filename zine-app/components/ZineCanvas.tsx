@@ -28,6 +28,8 @@ export function ZineCanvas({
   const canvasRef = useRef<HTMLDivElement>(null)
   const [zoom, setZoom] = useState(1)
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 })
+  const [isPanning, setIsPanning] = useState(false)
+  const [lastPanPoint, setLastPanPoint] = useState({ x: 0, y: 0 })
   const minZoom = 0.5
   const maxZoom = 3
 
@@ -82,8 +84,41 @@ export function ZineCanvas({
     }
   }, [])
 
-  // Handle mouse move for dragging
+  // Handle pan operations
+  const handlePanStart = useCallback((e: React.MouseEvent) => {
+    // Only start panning if zoomed in and not dragging an element
+    if (zoom > 1 && !draggedElement && e.button === 0) {
+      setIsPanning(true)
+      setLastPanPoint({ x: e.clientX, y: e.clientY })
+      e.preventDefault()
+    }
+  }, [zoom, draggedElement])
+
+  const handlePanMove = useCallback((e: React.MouseEvent) => {
+    if (isPanning) {
+      const deltaX = e.clientX - lastPanPoint.x
+      const deltaY = e.clientY - lastPanPoint.y
+      
+      setPanOffset(prev => ({
+        x: prev.x + deltaX / zoom,
+        y: prev.y + deltaY / zoom
+      }))
+      
+      setLastPanPoint({ x: e.clientX, y: e.clientY })
+      e.preventDefault()
+    }
+  }, [isPanning, lastPanPoint, zoom])
+
+  const handlePanEnd = useCallback(() => {
+    setIsPanning(false)
+  }, [])
+
+  // Handle mouse move for dragging and panning
   const handleMouseMove = (e: React.MouseEvent) => {
+    // Handle panning first
+    handlePanMove(e)
+    
+    // Then handle element dragging
     if (draggedElement && canvasRef.current) {
       const canvasRect = canvasRef.current.getBoundingClientRect()
       const newX = e.clientX - canvasRect.left - dragOffset.x
@@ -154,12 +189,14 @@ export function ZineCanvas({
         />
 
         {/* ZINE Pages Container */}
-        <div className="absolute inset-0 flex items-center justify-center p-8">
+        <div className="absolute inset-0 flex items-center justify-center p-4">
           <motion.div
             className="relative rounded-xl overflow-hidden"
             style={{
-              width: 800,
-              height: 600,
+              width: "95%",
+              height: "90%",
+              maxWidth: 1200,
+              maxHeight: 800,
               filter: "drop-shadow(0 25px 50px rgba(0,0,0,0.4))",
             }}
             initial={{ opacity: 0, y: 20 }}
@@ -200,11 +237,19 @@ export function ZineCanvas({
               style={{
                 transform: `scale(${zoom}) translate(${panOffset.x}px, ${panOffset.y}px)`,
                 transformOrigin: "center center",
-                transition: "transform 0.1s ease-out"
+                transition: isPanning ? "none" : "transform 0.1s ease-out",
+                cursor: zoom > 1 && !draggedElement ? (isPanning ? "grabbing" : "grab") : "default"
               }}
+              onMouseDown={handlePanStart}
               onMouseMove={handleMouseMove}
-              onMouseUp={() => setDraggedElement(null)}
-              onMouseLeave={() => setDraggedElement(null)}
+              onMouseUp={(e) => {
+                setDraggedElement(null)
+                handlePanEnd()
+              }}
+              onMouseLeave={(e) => {
+                setDraggedElement(null)
+                handlePanEnd()
+              }}
               onWheel={handleWheel}
               onTouchStart={handleTouchStart}
               onTouchMove={handleTouchMove}
