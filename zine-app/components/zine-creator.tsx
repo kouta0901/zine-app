@@ -26,54 +26,11 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { novelize, saveZine, review } from "@/lib/api"
-
-interface ZineCreatorProps {
-  onBack: () => void
-}
-
-interface Element {
-  id: string
-  type: "text" | "image" | "shape"
-  x: number
-  y: number
-  width: number
-  height: number
-  content?: string
-  src?: string
-  color?: string
-  fontSize?: number
-  pageId: string
-}
-
-interface Page {
-  id: string
-  elements: Element[]
-  title: string
-}
-
-interface ChatMessage {
-  id: string
-  type: "user" | "ai"
-  content: string
-  timestamp: Date
-}
-
-type CreatorMode = "zine" | "novel"
-type MenuSection = "concept" | "ai-writer" | "worldview" | "writer-review" | "style" | "onepoint"
-
-type TextSelection = {
-  start: number
-  end: number
-  text: string
-}
-
-type ReviewSuggestion = {
-  id: string
-  originalText: string
-  suggestedText: string
-  reason: string
-  applied: boolean
-}
+import { LoadingScreens } from "./LoadingScreens"
+import { ZineToolbar } from "./ZineToolbar"
+import { ZineCanvas } from "./ZineCanvas"
+import { ZineMenuPanel } from "./ZineMenuPanel"
+import { ZineCreatorProps, Element, Page, ChatMessage, TextSelection, ReviewSuggestion, CreatorMode, MenuSection } from "@/types/zine"
 
 export function ZineCreator({ onBack }: ZineCreatorProps) {
   const [mode, setMode] = useState<"zine" | "novel">("zine")
@@ -83,7 +40,6 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
   const [activeMenuSection, setActiveMenuSection] = useState<string | null>(null)
   const [activeNovelSection, setActiveNovelSection] = useState<string | null>(null)
   const [showNovelizeButton, setShowNovelizeButton] = useState(false) // Track if novelize button should be shown
-  const canvasRef = useRef<HTMLDivElement>(null)
   const [showConfigPanel, setShowConfigPanel] = useState(false) // Declare the variable here
   const [showZineExamples, setShowZineExamples] = useState(false)
   const [isGeneratingNovel, setIsGeneratingNovel] = useState(false) // Loading state for novel generation
@@ -123,23 +79,6 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
 
   const currentPage = pages[currentPageIndex]
 
-  // Handle mouse move for dragging
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (draggedElement && canvasRef.current) {
-      const canvasRect = canvasRef.current.getBoundingClientRect()
-      const newX = e.clientX - canvasRect.left - dragOffset.x
-      const newY = e.clientY - canvasRect.top - dragOffset.y
-      
-      // Constrain to canvas bounds
-      const element = currentPage.elements.find(el => el.id === draggedElement)
-      if (element) {
-        const constrainedX = Math.max(0, Math.min(newX, canvasRect.width - element.width))
-        const constrainedY = Math.max(0, Math.min(newY, canvasRect.height - element.height))
-        
-        updateElement(draggedElement, { x: constrainedX, y: constrainedY })
-      }
-    }
-  }
   const isCoverPage = false
 
   const zineMenuSections = [
@@ -180,6 +119,73 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
       }
       setChatMessages((prev) => [...prev, aiMessage])
     }, 1000)
+  }
+
+  const sendReviewMessage = () => {
+    if (!reviewChatInput.trim()) return
+
+    const userMessage: ChatMessage = {
+      id: Date.now().toString(),
+      type: "user", 
+      content: reviewChatInput,
+      timestamp: new Date(),
+    }
+
+    setReviewChatMessages((prev) => [...prev, userMessage])
+    setReviewChatInput("")
+
+    // Simulate AI response
+    setTimeout(() => {
+      const aiMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        type: "ai",
+        content: "素晴らしい作品ですね！より魅力的にするためのアドバイスをお伝えします。",
+        timestamp: new Date(),
+      }
+      setReviewChatMessages((prev) => [...prev, aiMessage])
+    }, 1000)
+  }
+
+  const handleStyleModify = async (style: string) => {
+    setIsModifyingStyle(true)
+    try {
+      if (!novelContent) {
+        throw new Error("修正する小説がありません。まず小説を生成してください。")
+      }
+      const result = await review({
+        original: novelContent,
+        instruction: `小説全体の文体を「${style}」に修正してください。元の内容やストーリーは変えず、文体だけを調整してください。`
+      })
+      setNovelContent(result.text)
+      const splitPages = splitNovelContent(result.text)
+      setNovelPages(splitPages)
+    } catch (error) {
+      console.error("文体修正エラー:", error)
+      alert(`文体の修正中にエラーが発生しました: ${error instanceof Error ? error.message : '不明なエラー'}`)
+    } finally {
+      setIsModifyingStyle(false)
+    }
+  }
+
+  const handleOnepointModify = async (option: string) => {
+    setIsApplyingOnepoint(true)
+    try {
+      if (!novelContent) {
+        throw new Error("修正する小説がありません。まず小説を生成してください。")
+      }
+      const result = await review({
+        original: novelContent,
+        instruction: `小説全体に「${option}」の要素を追加して修正してください。元のストーリーを活かしつつ、指定された要素を適切に織り込んでください。`
+      })
+      setNovelContent(result.text)
+      const splitPages = splitNovelContent(result.text)
+      setNovelPages(splitPages)
+    } catch (error) {
+      console.error("ワンポイント修正エラー:", error)
+      alert(`ワンポイント修正中にエラーが発生しました: ${error instanceof Error ? error.message : '不明なエラー'}`)
+    } finally {
+      setIsApplyingOnepoint(false)
+    }
   }
 
   const addPage = () => {
@@ -1375,159 +1381,11 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
       background: "linear-gradient(135deg, #f7f1e8 0%, #f5ede1 25%, #f3e9d4 50%, #f1e5c7 75%, #ede0ba 100%)",
       color: "#4a3c28"
     }}>
-      {/* 小説生成ローディング画面 */}
-      {isGeneratingNovel && (
-        <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: "rgba(74, 60, 40, 0.8)" }}>
-          <motion.div
-            className="rounded-xl p-8 max-w-md text-center"
-            style={{
-              background: "linear-gradient(135deg, rgba(247, 241, 232, 0.95) 0%, rgba(241, 229, 199, 0.95) 100%)",
-              border: "1px solid rgba(139, 115, 85, 0.3)",
-              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.4)"
-            }}
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.3 }}
-          >
-            <div className="mb-6">
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                className="inline-block"
-              >
-                <Sparkles className="w-12 h-12" style={{ color: "#8b6914" }} />
-              </motion.div>
-            </div>
-            <h3 className="text-xl font-bold mb-3" style={{ color: "#4a3c28" }}>小説を生成中...</h3>
-            <p className="text-sm mb-4" style={{ color: "#8b7355" }}>
-              あなたのZINEを素敵な小説に変換しています。
-              少々お待ちください。
-            </p>
-            <div className="flex justify-center space-x-2">
-              <motion.div
-                animate={{ opacity: [0.3, 1, 0.3] }}
-                transition={{ duration: 1.5, repeat: Infinity }}
-                className="w-2 h-2 rounded-full"
-                style={{ backgroundColor: "#8b6914" }}
-              />
-              <motion.div
-                animate={{ opacity: [0.3, 1, 0.3] }}
-                transition={{ duration: 1.5, repeat: Infinity, delay: 0.2 }}
-                className="w-2 h-2 rounded-full"
-                style={{ backgroundColor: "#8b6914" }}
-              />
-              <motion.div
-                animate={{ opacity: [0.3, 1, 0.3] }}
-                transition={{ duration: 1.5, repeat: Infinity, delay: 0.4 }}
-                className="w-2 h-2 rounded-full"
-                style={{ backgroundColor: "#8b6914" }}
-              />
-            </div>
-          </motion.div>
-        </div>
-      )}
-
-      {/* 文体修正ローディング画面 */}
-      {isModifyingStyle && (
-        <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: "rgba(74, 60, 40, 0.8)" }}>
-          <motion.div
-            className="rounded-xl p-8 max-w-md text-center"
-            style={{
-              background: "linear-gradient(135deg, rgba(247, 241, 232, 0.95) 0%, rgba(241, 229, 199, 0.95) 100%)",
-              border: "1px solid rgba(139, 115, 85, 0.3)",
-              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.4)"
-            }}
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.3 }}
-          >
-            <div className="mb-6">
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                className="inline-block"
-              >
-                <Palette className="w-12 h-12" style={{ color: "#8b6914" }} />
-              </motion.div>
-            </div>
-            <h3 className="text-xl font-bold mb-3" style={{ color: "#4a3c28" }}>小説全体の文体を調整中...</h3>
-            <p className="text-sm mb-4" style={{ color: "#8b7355" }}>
-              選択された文体に合わせて小説全体を調整しています。
-            </p>
-            <div className="flex justify-center space-x-2">
-              <motion.div
-                animate={{ opacity: [0.3, 1, 0.3] }}
-                transition={{ duration: 1.5, repeat: Infinity }}
-                className="w-2 h-2 rounded-full"
-                style={{ backgroundColor: "#8b6914" }}
-              />
-              <motion.div
-                animate={{ opacity: [0.3, 1, 0.3] }}
-                transition={{ duration: 1.5, repeat: Infinity, delay: 0.2 }}
-                className="w-2 h-2 rounded-full"
-                style={{ backgroundColor: "#8b6914" }}
-              />
-              <motion.div
-                animate={{ opacity: [0.3, 1, 0.3] }}
-                transition={{ duration: 1.5, repeat: Infinity, delay: 0.4 }}
-                className="w-2 h-2 rounded-full"
-                style={{ backgroundColor: "#8b6914" }}
-              />
-            </div>
-          </motion.div>
-        </div>
-      )}
-
-      {/* ワンポイントアドバイス適用ローディング画面 */}
-      {isApplyingOnepoint && (
-        <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: "rgba(74, 60, 40, 0.8)" }}>
-          <motion.div
-            className="rounded-xl p-8 max-w-md text-center"
-            style={{
-              background: "linear-gradient(135deg, rgba(247, 241, 232, 0.95) 0%, rgba(241, 229, 199, 0.95) 100%)",
-              border: "1px solid rgba(139, 115, 85, 0.3)",
-              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.4)"
-            }}
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.3 }}
-          >
-            <div className="mb-6">
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                className="inline-block"
-              >
-                <Target className="w-12 h-12" style={{ color: "#8b6914" }} />
-              </motion.div>
-            </div>
-            <h3 className="text-xl font-bold mb-3" style={{ color: "#4a3c28" }}>小説全体にアドバイスを適用中...</h3>
-            <p className="text-sm mb-4" style={{ color: "#8b7355" }}>
-              ワンポイントアドバイスを小説全体に反映しています。
-            </p>
-            <div className="flex justify-center space-x-2">
-              <motion.div
-                animate={{ opacity: [0.3, 1, 0.3] }}
-                transition={{ duration: 1.5, repeat: Infinity }}
-                className="w-2 h-2 rounded-full"
-                style={{ backgroundColor: "#8b6914" }}
-              />
-              <motion.div
-                animate={{ opacity: [0.3, 1, 0.3] }}
-                transition={{ duration: 1.5, repeat: Infinity, delay: 0.2 }}
-                className="w-2 h-2 rounded-full"
-                style={{ backgroundColor: "#8b6914" }}
-              />
-              <motion.div
-                animate={{ opacity: [0.3, 1, 0.3] }}
-                transition={{ duration: 1.5, repeat: Infinity, delay: 0.4 }}
-                className="w-2 h-2 rounded-full"
-                style={{ backgroundColor: "#8b6914" }}
-              />
-            </div>
-          </motion.div>
-        </div>
-      )}
+      <LoadingScreens 
+        isGeneratingNovel={isGeneratingNovel}
+        isModifyingStyle={isModifyingStyle}
+        isApplyingOnepoint={isApplyingOnepoint}
+      />
 
       {showZineExamples && (
         <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: "rgba(74, 60, 40, 0.5)" }}>
@@ -1917,213 +1775,32 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
 
       <div className="flex h-screen">
         {/* Left Menu */}
-        {(
-          <motion.div
-            className="w-80 backdrop-blur-sm border-r p-6"
-            style={{
-              background: "rgba(247, 241, 232, 0.9)",
-              borderColor: "rgba(139, 115, 85, 0.3)"
-            }}
-            initial={{ x: -50, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            transition={{ delay: 0.1, duration: 0.3 }}
-          >
-            {mode === "zine" ? (
-              <div className="space-y-4">
-                <div className="mb-6">
-                  <h2
-                    className="text-2xl font-bold mb-2 flex items-center gap-2 cursor-pointer transition-colors"
-                    style={{ color: "#4a3c28" }}
-                    onClick={() => {
-                      setShowConfigPanel(false)
-                      setActiveMenuSection(null)
-                    }}
-                  >
-                    <BookOpen className="w-6 h-6" />
-                    ZINE Mode
-                  </h2>
-                  <p className="text-sm" style={{ color: "#8b7355" }}>雑誌のようなビジュアル作品を作成</p>
-                </div>
-
-                {!hasZineContent && (
-                  <div className="mb-6 p-4 rounded-lg border" style={{
-                    background: "rgba(241, 229, 199, 0.6)",
-                    borderColor: "rgba(139, 115, 85, 0.3)"
-                  }}>
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="font-semibold" style={{ color: "#4a3c28" }}>ZINEの例</h3>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setShowZineExamples(true)}
-                        className="hover:bg-amber-100"
-                        style={{ color: "#8b7355" }}
-                      >
-                        <Eye className="w-4 h-4 mr-1" />
-                        詳しく見る
-                      </Button>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="p-2 rounded border text-xs text-center" style={{
-                        background: "rgba(255, 253, 250, 0.8)",
-                        borderColor: "rgba(139, 115, 85, 0.3)",
-                        color: "#4a3c28"
-                      }}>
-                        <div className="bg-blue-500/30 h-8 mb-1 rounded"></div>
-                        フォトエッセイ
-                      </div>
-                      <div className="p-2 rounded border text-xs text-center" style={{
-                        background: "rgba(255, 253, 250, 0.8)",
-                        borderColor: "rgba(139, 115, 85, 0.3)",
-                        color: "#4a3c28"
-                      }}>
-                        <div className="bg-green-500/30 h-8 mb-1 rounded"></div>
-                        アートブック
-                      </div>
-                      <div className="p-2 rounded border text-xs text-center" style={{
-                        background: "rgba(255, 253, 250, 0.8)",
-                        borderColor: "rgba(139, 115, 85, 0.3)",
-                        color: "#4a3c28"
-                      }}>
-                        <div className="bg-pink-500/30 h-8 mb-1 rounded"></div>
-                        詩集
-                      </div>
-                      <div className="p-2 rounded border text-xs text-center" style={{
-                        background: "rgba(255, 253, 250, 0.8)",
-                        borderColor: "rgba(139, 115, 85, 0.3)",
-                        color: "#4a3c28"
-                      }}>
-                        <div className="bg-purple-500/30 h-8 mb-1 rounded"></div>
-                        イラスト集
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Menu sections */}
-                <div className="space-y-2">
-                  {zineMenuSections.map((section) => (
-                    <Button
-                      key={section.id}
-                      variant={activeMenuSection === section.id ? "default" : "ghost"}
-                      className="w-full justify-start"
-                      style={{
-                        background: activeMenuSection === section.id ? "linear-gradient(135deg, #8b6914 0%, #a0751f 100%)" : "transparent",
-                        color: activeMenuSection === section.id ? "#fffdf7" : "#8b7355"
-                      }}
-                      onClick={() => handleMenuSectionClick(section.id)}
-                    >
-                      <section.icon className="w-4 h-4 mr-2" />
-                      {section.label}
-                    </Button>
-                  ))}
-                </div>
-
-                {!showConfigPanel && (
-                  <>
-                    <div className="mt-6 pt-6 border-t" style={{ borderColor: "rgba(139, 115, 85, 0.3)" }}>
-                      <h3 className="text-sm font-semibold mb-3" style={{ color: "#4a3c28" }}>ツール</h3>
-                      <div className="space-y-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="w-full justify-start"
-                          style={{
-                            color: "#8b7355",
-                            borderColor: "rgba(139, 115, 85, 0.3)",
-                            backgroundColor: "transparent"
-                          }}
-                          onClick={addTextElement}
-                        >
-                          <Type className="w-4 h-4 mr-2" />
-                          テキスト追加
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="w-full justify-start"
-                          style={{
-                            color: "#8b7355",
-                            borderColor: "rgba(139, 115, 85, 0.3)",
-                            backgroundColor: "transparent"
-                          }}
-                          onClick={addImageElement}
-                        >
-                          <ImageIcon className="w-4 h-4 mr-2" />
-                          画像追加
-                        </Button>
-                      </div>
-                    </div>
-
-                    {selectedElement && (
-                      <div className="mt-6 pt-6 border-t" style={{ borderColor: "rgba(139, 115, 85, 0.3)" }}>
-                        <h3 className="text-sm font-semibold mb-3" style={{ color: "#4a3c28" }}>選択中の要素</h3>
-                        <div className="space-y-2">
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            className="w-full"
-                            onClick={() => deleteElement(selectedElement)}
-                          >
-                            <X className="w-4 h-4 mr-2" />
-                            削除
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
-
-                <div className="mt-6 pt-6 border-t" style={{ borderColor: "rgba(139, 115, 85, 0.3)" }}>
-                  <Button
-                    onClick={handleNovelize}
-                    className="w-full text-white"
-                    style={{
-                      background: "linear-gradient(135deg, #8b6914 0%, #a0751f 50%, #b8860b 100%)"
-                    }}
-                  >
-                    <Sparkles className="w-4 h-4 mr-2" />
-                    小説化する
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="mb-6">
-                  <h2 className="text-2xl font-bold mb-2 flex items-center gap-2" style={{ color: "#4a3c28" }}>
-                    <Sparkles className="w-6 h-6" />
-                    小説モード
-                  </h2>
-                  <p className="text-sm" style={{ color: "#8b7355" }}>ZINEを小説として編集・執筆</p>
-                </div>
-
-                {/* Novel menu sections */}
-                <div className="space-y-2">
-                  {novelMenuSections.map((section) => (
-                    <Button
-                      key={section.id}
-                      variant={activeNovelSection === section.id ? "default" : "ghost"}
-                      className="w-full justify-start"
-                      style={{
-                        background: activeNovelSection === section.id ? "linear-gradient(135deg, #8b6914 0%, #a0751f 100%)" : "transparent",
-                        color: activeNovelSection === section.id ? "#fffdf7" : "#8b7355"
-                      }}
-                      onClick={() => setActiveNovelSection(activeNovelSection === section.id ? null : section.id)}
-                    >
-                      <section.icon className="w-4 h-4 mr-2" />
-                      {section.label}
-                    </Button>
-                  ))}
-                </div>
-
-                {/* Novel panels */}
-                {activeNovelSection === "writer-review" && renderWriterReviewPanel()}
-                {activeNovelSection === "style" && renderStylePanel()}
-                {activeNovelSection === "onepoint" && renderOnepointPanel()}
-              </div>
-            )}
-          </motion.div>
-        )}
+        <ZineMenuPanel
+          mode={mode}
+          activeMenuSection={activeMenuSection}
+          setActiveMenuSection={setActiveMenuSection}
+          activeNovelSection={activeNovelSection}
+          setActiveNovelSection={setActiveNovelSection}
+          hasZineContent={hasZineContent}
+          showZineExamples={showZineExamples}
+          setShowZineExamples={setShowZineExamples}
+          showConfigPanel={showConfigPanel}
+          setShowConfigPanel={setShowConfigPanel}
+          selectedElement={selectedElement}
+          onMenuSectionClick={handleMenuSectionClick}
+          onAddTextElement={addTextElement}
+          onAddImageElement={addImageElement}
+          onDeleteElement={deleteElement}
+          onNovelize={handleNovelize}
+          reviewChatMessages={reviewChatMessages}
+          reviewChatInput={reviewChatInput}
+          setReviewChatInput={setReviewChatInput}
+          onSendReviewMessage={sendReviewMessage}
+          onStyleModify={handleStyleModify}
+          isModifyingStyle={isModifyingStyle}
+          onOnepointModify={handleOnepointModify}
+          isApplyingOnepoint={isApplyingOnepoint}
+        />
 
         {/* Main Content */}
         <div className="flex-1 flex flex-col">
@@ -2143,302 +1820,40 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
             </div>
           ) : (
             <>
-              {/* Header */}
-              <div className="flex items-center justify-between p-6 border-b" style={{ borderColor: "rgba(139, 115, 85, 0.2)" }}>
-                <div className="flex items-center gap-4">
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={mode === "novel" ? () => setMode("zine") : onBack} 
-                    className="hover:bg-amber-100" 
-                    style={{ color: "#8b7355" }}
-                  >
-                    <ArrowLeft className="w-4 h-4 mr-2" />
-                    戻る
-                  </Button>
-                  <h1 className="text-xl font-semibold" style={{ color: "#4a3c28" }}>{mode === "zine" ? "ZINE作成" : "小説編集"}</h1>
-                  
-                  {/* Page Navigation */}
-                  {mode === "zine" && (
-                    <div className="flex items-center gap-2 ml-6">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={goToPreviousPage}
-                        disabled={currentPageIndex === 0}
-                        className="hover:bg-amber-100"
-                        style={{ color: currentPageIndex === 0 ? "#ccc" : "#8b7355" }}
-                      >
-                        <ChevronLeft className="w-4 h-4" />
-                      </Button>
-                      
-                      <span className="text-sm px-3" style={{ color: "#8b7355" }}>
-                        ページ {currentPageIndex + 1} / {pages.length}
-                      </span>
-                      
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={goToNextPage}
-                        disabled={currentPageIndex === pages.length - 1}
-                        className="hover:bg-amber-100"
-                        style={{ color: currentPageIndex === pages.length - 1 ? "#ccc" : "#8b7355" }}
-                      >
-                        <ChevronRight className="w-4 h-4" />
-                      </Button>
-                      
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={addPage}
-                        className="hover:bg-amber-100 ml-2"
-                        style={{ color: "#8b7355" }}
-                      >
-                        <Plus className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  )}
-                  
-                  {/* Novel Page Navigation */}
-                  {mode === "novel" && novelPages.length > 0 && (
-                    <div className="flex items-center gap-2 ml-6">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={goToPreviousNovelPage}
-                        disabled={currentNovelPage === 1}
-                        className="hover:bg-amber-100"
-                        style={{ color: currentNovelPage === 1 ? "#ccc" : "#8b7355" }}
-                      >
-                        <ChevronLeft className="w-4 h-4" />
-                      </Button>
-                      
-                      <span className="text-sm px-3" style={{ color: "#8b7355" }}>
-                        見開き {currentNovelPage} / {Math.ceil(novelPages.length / 2)}
-                      </span>
-                      
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={goToNextNovelPage}
-                        disabled={currentNovelPage >= Math.ceil(novelPages.length / 2)}
-                        className="hover:bg-amber-100"
-                        style={{ color: currentNovelPage >= Math.ceil(novelPages.length / 2) ? "#ccc" : "#8b7355" }}
-                      >
-                        <ChevronRight className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Button 
-                    size="sm" 
-                    className="text-white" 
-                    style={{
-                      background: "linear-gradient(135deg, #8b6914 0%, #a0751f 100%)"
-                    }}
-                    onClick={handleSaveZine}
-                    disabled={isSaving}
-                  >
-                    <Save className="w-4 h-4 mr-2" />
-                    {isSaving ? "保存中..." : "保存"}
-                  </Button>
-                </div>
-              </div>
+              <ZineToolbar
+                onBack={mode === "novel" ? () => setMode("zine") : onBack}
+                zineTitle={zineTitle}
+                setZineTitle={setZineTitle}
+                mode={mode}
+                setMode={setMode}
+                onSave={handleSaveZine}
+                isSaving={isSaving}
+                currentPageIndex={currentPageIndex}
+                totalPages={pages.length}
+                onPreviousPage={goToPreviousPage}
+                onNextPage={goToNextPage}
+                onAddPage={addPage}
+                currentNovelPage={currentNovelPage}
+                totalNovelPages={novelPages.length}
+                onPreviousNovelPage={goToPreviousNovelPage}
+                onNextNovelPage={goToNextNovelPage}
+              />
 
               {/* Main editing area */}
-              <div className="flex-1 overflow-hidden flex items-center justify-center" style={{
+              <div className="flex-1 overflow-hidden flex items-center justify-center pt-24" style={{
                 background: "linear-gradient(135deg, #f3e9d4 0%, #f1e5c7 50%, #ede0ba 100%)"
               }}>
                 {mode === "zine" ? (
-                  <div className="relative">
-                    {/* ZINE Creation Workspace */}
-                    <motion.div
-                      className="relative"
-                      style={{ width: 900, height: 700 }}
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ duration: 0.3 }}
-                    >
-                      {/* Table/Desk background */}
-                      <div
-                        className="absolute inset-0 rounded-2xl"
-                        style={{
-                          background: `
-                            linear-gradient(135deg, #d2b48c 0%, #daa520 20%, #cd853f 40%, #d2b48c 60%, #f4a460 80%, #daa520 100%),
-                            repeating-linear-gradient(
-                              45deg,
-                              transparent,
-                              transparent 2px,
-                              rgba(139, 115, 85, 0.1) 2px,
-                              rgba(139, 115, 85, 0.1) 4px
-                            )
-                          `,
-                          boxShadow: `
-                            inset 0 0 100px rgba(139, 69, 19, 0.1),
-                            inset 0 2px 4px rgba(255, 248, 220, 0.3),
-                            0 8px 32px rgba(139, 69, 19, 0.2)
-                          `,
-                        }}
-                      />
-                      
-                      {/* Wood grain texture overlay */}
-                      <div
-                        className="absolute inset-0 rounded-2xl opacity-30"
-                        style={{
-                          background: `
-                            repeating-linear-gradient(
-                              90deg,
-                              rgba(101, 67, 33, 0.1) 0px,
-                              rgba(139, 115, 85, 0.05) 20px,
-                              rgba(101, 67, 33, 0.1) 40px,
-                              rgba(160, 135, 108, 0.05) 60px
-                            )
-                          `
-                        }}
-                      />
-
-                      {/* ZINE Pages Container */}
-                      <div className="absolute inset-0 flex items-center justify-center p-8">
-                        <motion.div
-                          ref={canvasRef}
-                          className="relative rounded-xl overflow-hidden"
-                          style={{
-                            width: 800,
-                            height: 600,
-                            filter: "drop-shadow(0 25px 50px rgba(0,0,0,0.4))",
-                          }}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.2, duration: 0.6 }}
-                        >
-                          {/* Paper texture background with subtle shadows */}
-                          <div
-                            className="absolute inset-0 rounded-xl"
-                            style={{
-                              background: `
-                                radial-gradient(ellipse 80% 60% at 50% 20%, rgba(255,255,255,0.98) 0%, rgba(253,252,249,0.95) 40%, rgba(248,246,243,0.92) 100%),
-                                linear-gradient(180deg, rgba(255,255,255,0.3) 0%, rgba(0,0,0,0.02) 100%)
-                              `,
-                              backgroundColor: "#FFFEF9",
-                              boxShadow: `
-                                inset 0 0 20px rgba(139, 115, 85, 0.05),
-                                0 4px 8px rgba(139, 69, 19, 0.1)
-                              `
-                            }}
-                          />
-
-                          {/* Center binding with shadow */}
-                          <div
-                            className="absolute left-1/2 top-4 bottom-4 transform -translate-x-0.5"
-                            style={{
-                              width: "4px",
-                              background: "linear-gradient(to right, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.05) 50%, rgba(0,0,0,0.2) 100%)",
-                              boxShadow: "inset 0 0 20px rgba(0,0,0,0.15), 0 0 5px rgba(0,0,0,0.1)",
-                              borderRadius: "2px",
-                            }}
-                          />
-
-                          {/* Page content area */}
-                          <div 
-                            className="absolute inset-0 p-4"
-                            onMouseMove={handleMouseMove}
-                            onMouseUp={() => setDraggedElement(null)}
-                            onMouseLeave={() => setDraggedElement(null)}
-                          >
-                            {/* Render page elements */}
-                            {currentPage.elements.map((element) => (
-                              <div
-                                key={element.id}
-                                className={`absolute cursor-move border-2 ${
-                                  selectedElement === element.id ? "border-purple-500 shadow-lg" : "border-transparent"
-                                } hover:border-purple-300 transition-all duration-200`}
-                                style={{
-                                  left: element.x,
-                                  top: element.y,
-                                  width: element.width,
-                                  height: element.height,
-                                  zIndex: draggedElement === element.id ? 1000 : 1,
-                                }}
-                                onClick={() => setSelectedElement(element.id)}
-                                onDoubleClick={() => {
-                                  if (element.type === "text") {
-                                    const newContent = prompt("テキストを編集:", element.content || "")
-                                    if (newContent !== null) {
-                                      updateElement(element.id, { content: newContent })
-                                    }
-                                  }
-                                }}
-                                onMouseDown={(e) => {
-                                  e.preventDefault()
-                                  setDraggedElement(element.id)
-                                  setSelectedElement(element.id)
-                                  const rect = e.currentTarget.getBoundingClientRect()
-                                  setDragOffset({
-                                    x: e.clientX - rect.left,
-                                    y: e.clientY - rect.top,
-                                  })
-                                }}
-                                onMouseUp={() => {
-                                  setDraggedElement(null)
-                                }}
-                              >
-                                {element.type === "text" && (
-                                  <div
-                                    className="w-full h-full flex items-center justify-center p-3 bg-white/90 rounded-lg shadow-sm border border-gray-200"
-                                    style={{
-                                      fontSize: element.fontSize,
-                                      color: element.color,
-                                      fontWeight: "500",
-                                    }}
-                                  >
-                                    {element.content}
-                                  </div>
-                                )}
-                                {element.type === "image" && (
-                                  <img
-                                    src={element.src}
-                                    alt="ZINE element"
-                                    className="w-full h-full object-cover rounded-lg shadow-md"
-                                    draggable={false}
-                                  />
-                                )}
-                                {element.type === "shape" && (
-                                  <div
-                                    className="w-full h-full shadow-md"
-                                    style={{
-                                      backgroundColor: element.color,
-                                      borderRadius: element.content === "circle" ? "50%" : "8px",
-                                    }}
-                                  />
-                                )}
-                              </div>
-                            ))}
-
-
-                            {/* Empty state with modern design */}
-                            {currentPage.elements.length === 0 && (
-                              <div className="absolute inset-0 flex">
-                                <div className="flex-1 flex items-center justify-center">
-                                  <div className="text-center text-gray-400">
-                                    <div className="text-lg font-medium mb-2">左ページ</div>
-                                    <div className="text-sm opacity-70">ここに要素を配置します</div>
-                                  </div>
-                                </div>
-                                <div className="flex-1 flex items-center justify-center">
-                                  <div className="text-center text-gray-400">
-                                    <div className="text-lg font-medium mb-2">右ページ</div>
-                                    <div className="text-sm opacity-70">テキストや画像をドラッグ&ドロップ</div>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </motion.div>
-                      </div>
-                    </motion.div>
-                  </div>
+                  <ZineCanvas
+                    currentPage={currentPage}
+                    selectedElement={selectedElement}
+                    setSelectedElement={setSelectedElement}
+                    updateElement={updateElement}
+                    draggedElement={draggedElement}
+                    setDraggedElement={setDraggedElement}
+                    dragOffset={dragOffset}
+                    setDragOffset={setDragOffset}
+                  />
                 ) : (
                   <div className="w-full max-w-7xl mx-auto perspective-1000">
                     <motion.div
