@@ -1840,7 +1840,7 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
               />
 
               {/* Main editing area */}
-              <div className="flex-1 overflow-hidden flex items-center justify-center pt-24" style={{
+              <div className="flex-1 overflow-hidden flex items-center justify-center pt-16" style={{
                 background: "linear-gradient(135deg, #f3e9d4 0%, #f1e5c7 50%, #ede0ba 100%)"
               }}>
                 {mode === "zine" ? (

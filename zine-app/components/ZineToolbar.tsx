@@ -54,7 +54,7 @@ export function ZineToolbar({
       animate={{ y: 0 }}
       transition={{ delay: 0.2, duration: 0.8, ease: [0.25, 0.46, 0.45, 0.94] }}
     >
-      <div className="max-w-7xl mx-auto px-6 py-4">
+      <div className="max-w-7xl mx-auto px-6 py-2">
         <div className="flex items-center justify-between">
           <motion.div
             className="flex items-center gap-3"
@@ -159,45 +159,6 @@ export function ZineToolbar({
           </motion.div>
 
           <div className="flex items-center gap-4">
-            {/* Mode Toggle */}
-            <div className="flex items-center gap-1 rounded-lg p-1" style={{
-              background: "rgba(139, 115, 85, 0.1)"
-            }}>
-              <Button
-                variant={mode === "zine" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setMode("zine")}
-                className={`text-sm font-medium ${
-                  mode === "zine" 
-                    ? "text-white shadow-sm"
-                    : "hover:bg-white/10"
-                }`}
-                style={{
-                  background: mode === "zine" ? "linear-gradient(135deg, #8b6914 0%, #a0751f 100%)" : "transparent",
-                  color: mode === "zine" ? "#ffffff" : "#4a3c28"
-                }}
-              >
-                ZINE
-              </Button>
-              <Button
-                variant={mode === "novel" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setMode("novel")}
-                className={`text-sm font-medium ${
-                  mode === "novel" 
-                    ? "text-white shadow-sm"
-                    : "hover:bg-white/10"
-                }`}
-                style={{
-                  background: mode === "novel" ? "linear-gradient(135deg, #8b6914 0%, #a0751f 100%)" : "transparent",
-                  color: mode === "novel" ? "#ffffff" : "#4a3c28"
-                }}
-              >
-                小説
-              </Button>
-            </div>
-
-
             {/* Save Button */}
             <Button
               size="sm"
