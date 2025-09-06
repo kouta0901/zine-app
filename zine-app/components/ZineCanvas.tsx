@@ -26,12 +26,12 @@ export function ZineCanvas({
   setDragOffset
 }: ZineCanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null)
-  const [zoom, setZoom] = useState(1)
+  const [zoom, setZoom] = useState(0.6) // Start with smaller zoom to fit screen
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 })
   const [isPanning, setIsPanning] = useState(false)
   const [lastPanPoint, setLastPanPoint] = useState({ x: 0, y: 0 })
-  const minZoom = 0.5
-  const maxZoom = 3
+  const minZoom = 0.3
+  const maxZoom = 2
 
   // Handle zoom with wheel/trackpad
   const handleWheel = useCallback((e: React.WheelEvent) => {
@@ -86,13 +86,13 @@ export function ZineCanvas({
 
   // Handle pan operations
   const handlePanStart = useCallback((e: React.MouseEvent) => {
-    // Only start panning if zoomed in and not dragging an element
-    if (zoom > 1 && !draggedElement && e.button === 0) {
+    // Start panning if not dragging an element
+    if (!draggedElement && e.button === 0) {
       setIsPanning(true)
       setLastPanPoint({ x: e.clientX, y: e.clientY })
       e.preventDefault()
     }
-  }, [zoom, draggedElement])
+  }, [draggedElement])
 
   const handlePanMove = useCallback((e: React.MouseEvent) => {
     if (isPanning) {
@@ -189,19 +189,35 @@ export function ZineCanvas({
         />
 
         {/* ZINE Pages Container */}
-        <div className="absolute inset-0 flex items-center justify-center p-4">
+        <div className="absolute inset-0 flex items-center justify-center p-2 overflow-hidden">
           <motion.div
-            className="relative rounded-xl overflow-hidden"
+            className="relative rounded-xl"
             style={{
-              width: "95%",
-              height: "90%",
-              maxWidth: 1200,
-              maxHeight: 800,
+              width: 1400,
+              height: 900,
               filter: "drop-shadow(0 25px 50px rgba(0,0,0,0.4))",
+              transform: `scale(${zoom}) translate(${panOffset.x}px, ${panOffset.y}px)`,
+              transformOrigin: "center center",
+              transition: isPanning ? "none" : "transform 0.1s ease-out",
+              cursor: !draggedElement ? (isPanning ? "grabbing" : "grab") : "default"
             }}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2, duration: 0.6 }}
+            onMouseDown={handlePanStart}
+            onMouseMove={handleMouseMove}
+            onMouseUp={() => {
+              setDraggedElement(null)
+              handlePanEnd()
+            }}
+            onMouseLeave={() => {
+              setDraggedElement(null)
+              handlePanEnd()
+            }}
+            onWheel={handleWheel}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
           >
             {/* Paper texture background with subtle shadows */}
             <div
@@ -233,27 +249,7 @@ export function ZineCanvas({
             {/* Page content area */}
             <div 
               ref={canvasRef}
-              className="absolute inset-0 p-4 overflow-hidden"
-              style={{
-                transform: `scale(${zoom}) translate(${panOffset.x}px, ${panOffset.y}px)`,
-                transformOrigin: "center center",
-                transition: isPanning ? "none" : "transform 0.1s ease-out",
-                cursor: zoom > 1 && !draggedElement ? (isPanning ? "grabbing" : "grab") : "default"
-              }}
-              onMouseDown={handlePanStart}
-              onMouseMove={handleMouseMove}
-              onMouseUp={(e) => {
-                setDraggedElement(null)
-                handlePanEnd()
-              }}
-              onMouseLeave={(e) => {
-                setDraggedElement(null)
-                handlePanEnd()
-              }}
-              onWheel={handleWheel}
-              onTouchStart={handleTouchStart}
-              onTouchMove={handleTouchMove}
-              onTouchEnd={handleTouchEnd}
+              className="absolute inset-0 p-8"
             >
               {/* Render page elements */}
               {currentPage.elements.map((element) => (
