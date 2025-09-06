@@ -1,7 +1,7 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { useRef, useState } from "react"
+import { useRef, useState, useCallback } from "react"
 import { Element, Page } from "@/types/zine"
 
 interface ZineCanvasProps {
@@ -26,6 +26,61 @@ export function ZineCanvas({
   setDragOffset
 }: ZineCanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null)
+  const [zoom, setZoom] = useState(1)
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 })
+  const minZoom = 0.5
+  const maxZoom = 3
+
+  // Handle zoom with wheel/trackpad
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    // Check if it's a pinch gesture (ctrlKey indicates pinch on trackpad)
+    // Also detect if deltaY is small and ctrlKey is present (macOS trackpad pinch)
+    if (e.ctrlKey || (Math.abs(e.deltaY) < 50 && e.ctrlKey)) {
+      e.preventDefault()
+      const delta = -e.deltaY * 0.01
+      const newZoom = Math.max(minZoom, Math.min(maxZoom, zoom + delta))
+      setZoom(newZoom)
+    }
+  }, [zoom, minZoom, maxZoom])
+
+  // Handle touch gestures for mobile
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      e.preventDefault()
+    }
+  }, [])
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      e.preventDefault()
+      // Calculate distance between two fingers
+      const touch1 = e.touches[0]
+      const touch2 = e.touches[1]
+      const distance = Math.sqrt(
+        Math.pow(touch2.clientX - touch1.clientX, 2) + 
+        Math.pow(touch2.clientY - touch1.clientY, 2)
+      )
+      
+      // Store initial distance if not set
+      if (!canvasRef.current?.dataset.initialDistance) {
+        canvasRef.current!.dataset.initialDistance = distance.toString()
+        canvasRef.current!.dataset.initialZoom = zoom.toString()
+      } else {
+        const initialDistance = parseFloat(canvasRef.current.dataset.initialDistance)
+        const initialZoom = parseFloat(canvasRef.current.dataset.initialZoom)
+        const scale = distance / initialDistance
+        const newZoom = Math.max(minZoom, Math.min(maxZoom, initialZoom * scale))
+        setZoom(newZoom)
+      }
+    }
+  }, [zoom, minZoom, maxZoom])
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length < 2 && canvasRef.current) {
+      canvasRef.current.dataset.initialDistance = ""
+      canvasRef.current.dataset.initialZoom = ""
+    }
+  }, [])
 
   // Handle mouse move for dragging
   const handleMouseMove = (e: React.MouseEvent) => {
@@ -47,6 +102,11 @@ export function ZineCanvas({
 
   return (
     <div className="relative">
+      {/* Zoom indicator */}
+      <div className="absolute top-4 right-4 z-10 bg-black/20 backdrop-blur-sm rounded-lg px-3 py-1 text-white text-sm font-medium">
+        {Math.round(zoom * 100)}%
+      </div>
+      
       {/* ZINE Creation Workspace */}
       <motion.div
         className="relative"
@@ -94,7 +154,7 @@ export function ZineCanvas({
         />
 
         {/* ZINE Pages Container */}
-        <div className="absolute inset-0 flex items-center justify-center p-8">
+        <div className="absolute inset-0 flex items-center justify-center p-8 overflow-hidden">
           <motion.div
             ref={canvasRef}
             className="relative rounded-xl overflow-hidden"
@@ -102,7 +162,14 @@ export function ZineCanvas({
               width: 800,
               height: 600,
               filter: "drop-shadow(0 25px 50px rgba(0,0,0,0.4))",
+              transform: `scale(${zoom}) translate(${panOffset.x}px, ${panOffset.y}px)`,
+              transformOrigin: "center center",
+              transition: "transform 0.1s ease-out"
             }}
+            onWheel={handleWheel}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2, duration: 0.6 }}
