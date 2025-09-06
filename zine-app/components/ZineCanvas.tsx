@@ -154,22 +154,14 @@ export function ZineCanvas({
         />
 
         {/* ZINE Pages Container */}
-        <div className="absolute inset-0 flex items-center justify-center p-8 overflow-hidden">
+        <div className="absolute inset-0 flex items-center justify-center p-8">
           <motion.div
-            ref={canvasRef}
             className="relative rounded-xl overflow-hidden"
             style={{
               width: 800,
               height: 600,
               filter: "drop-shadow(0 25px 50px rgba(0,0,0,0.4))",
-              transform: `scale(${zoom}) translate(${panOffset.x}px, ${panOffset.y}px)`,
-              transformOrigin: "center center",
-              transition: "transform 0.1s ease-out"
             }}
-            onWheel={handleWheel}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2, duration: 0.6 }}
@@ -203,10 +195,20 @@ export function ZineCanvas({
 
             {/* Page content area */}
             <div 
-              className="absolute inset-0 p-4"
+              ref={canvasRef}
+              className="absolute inset-0 p-4 overflow-hidden"
+              style={{
+                transform: `scale(${zoom}) translate(${panOffset.x}px, ${panOffset.y}px)`,
+                transformOrigin: "center center",
+                transition: "transform 0.1s ease-out"
+              }}
               onMouseMove={handleMouseMove}
               onMouseUp={() => setDraggedElement(null)}
               onMouseLeave={() => setDraggedElement(null)}
+              onWheel={handleWheel}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
             >
               {/* Render page elements */}
               {currentPage.elements.map((element) => (
