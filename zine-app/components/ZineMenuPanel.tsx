@@ -222,7 +222,7 @@ export function ZineMenuPanel({
 
   return (
     <motion.div
-      className="w-80 backdrop-blur-sm border-r p-6"
+      className="w-80 backdrop-blur-sm border-r p-6 pt-20"
       style={{
         background: "rgba(247, 241, 232, 0.9)",
         borderColor: "rgba(139, 115, 85, 0.3)"
