@@ -180,7 +180,7 @@ export default function ZineApp() {
                       WebkitBackgroundClip: "text",
                       WebkitTextFillColor: "transparent"
                     }}>
-                      ZINE
+                      TaleZine
                     </h1>
                   </motion.div>
 
@@ -199,34 +199,7 @@ export default function ZineApp() {
                         }}
                       />
                     </div>
-
-                    <select
-                      value={selectedGenre}
-                      onChange={(e) => setSelectedGenre(e.target.value)}
-                      className="rounded-lg px-3 py-2 focus:outline-none focus:ring-2"
-                      style={{
-                        background: "rgba(255, 253, 250, 0.8)",
-                        borderColor: "rgba(139, 115, 85, 0.3)",
-                        color: "#4a3c28"
-                      }}
-                    >
-                      {genres.map((genre) => (
-                        <option key={genre} value={genre} style={{ background: "#f7f1e8", color: "#4a3c28" }}>
-                          {genre}
-                        </option>
-                      ))}
-                    </select>
-
-                    <Button
-                      onClick={handleCreateNew}
-                      className="text-white border-0 font-medium"
-                      style={{
-                        background: "linear-gradient(135deg, #8b6914 0%, #a0751f 50%, #b8860b 100%)"
-                      }}
-                    >
-                      <Plus className="w-4 h-4 mr-2" />
-                      Create
-                    </Button>
+                    {/* Removed category toggle and Create button per request */}
                   </div>
                 </div>
               </div>
