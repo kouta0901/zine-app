@@ -4,6 +4,7 @@ import bodyParser from "body-parser";
 import { VertexAI } from "@google-cloud/vertexai";
 import { Storage } from "@google-cloud/storage";
 import { GoogleAuth } from "google-auth-library";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import https from "https";
 import { URL } from "url";
 
@@ -15,7 +16,7 @@ app.use(bodyParser.json());
 
 // Initialize Vertex AI
 const project = process.env.GOOGLE_CLOUD_PROJECT || "vital-analogy-470911-t0";
-const location = process.env.GOOGLE_CLOUD_LOCATION || "us-central1";
+const location = process.env.GOOGLE_CLOUD_LOCATION || "global";
 
 const vertexAI = new VertexAI({
   project: project,
@@ -25,8 +26,11 @@ const vertexAI = new VertexAI({
 // Initialize Vertex AI for image generation (global region)
 const vertexAIGlobal = new VertexAI({
   project: project,
-  location: "global", // Gemini 2.5 Flash Image is only available in global
+  location: "global", // Use global for proper model availability
 });
+
+// Initialize Google Generative AI for image generation (fallback)
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || "");
 
 // Initialize Google Auth for Vertex AI API
 const auth = new GoogleAuth({
@@ -52,25 +56,101 @@ app.post("/novelize", async (req, res) => {
       return res.status(400).json({ error: "concept, world, and prompt are required" });
     }
 
-    const model = vertexAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+    console.log("Novel generation requested for concept:", concept);
     
-    const result = await model.generateContent({
-      contents: [{
-        role: "user",
-        parts: [{
-          text: `次の設定に基づいて日本語の小説本文を生成してください。
+    try {
+      // Direct HTTP API call to Vertex AI (Gemini 1.5 Pro)
+      console.log("Trying direct HTTP API call to Vertex AI (Gemini 1.5 Pro)...");
+      
+      const authClient = await auth.getClient();
+      const tokenResponse = await authClient.getAccessToken();
+      const accessToken = tokenResponse.token;
+      
+      if (!accessToken) {
+        throw new Error("Failed to get access token");
+      }
+      
+      const apiUrl = `https://aiplatform.googleapis.com/v1/projects/${project}/locations/global/publishers/google/models/gemini-2.5-flash:generateContent`;
+      
+      const requestBody = {
+        contents: [{
+          role: "user",
+          parts: [{
+            text: `次の設定に基づいて日本語の小説本文を生成してください。
 
 - コンセプト: ${concept}
 - 世界観: ${world}
 - 指示: ${prompt}
 
 制約: 体裁を整え、章立てと見出しを入れる。文体は読みやすく、魅力的な物語として構成してください。`
+          }]
         }]
-      }]
-    });
+      };
+      
+      console.log("Making direct API call to:", apiUrl);
+      
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json; charset=utf-8',
+        },
+        body: JSON.stringify(requestBody),
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Direct API call failed: ${response.status} ${response.statusText}\n${errorText}`);
+      }
+      
+      const apiResult: any = await response.json();
+      console.log("Direct HTTP API response received (Gemini 1.5 Pro)");
+      
+      const text = apiResult.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      
+      if (text) {
+        console.log("Novel generation successful via direct HTTP API");
+        return res.json({ text });
+      }
+      
+    } catch (directApiError) {
+      console.error("Direct HTTP API call failed:", directApiError);
+    }
 
-    const text = result.response.candidates?.[0]?.content.parts[0]?.text || "";
-    res.json({ text });
+    // Fallback: Try Google Generative AI (if API key is available)
+    if (process.env.GOOGLE_API_KEY) {
+      console.log("Trying Google Generative AI as fallback...");
+      
+      try {
+        const directModel = genAI.getGenerativeModel({ 
+          model: "gemini-1.5-pro"
+        });
+        
+        const result = await directModel.generateContent([
+          `次の設定に基づいて日本語の小説本文を生成してください。
+
+- コンセプト: ${concept}
+- 世界観: ${world}
+- 指示: ${prompt}
+
+制約: 体裁を整え、章立てと見出しを入れる。文体は読みやすく、魅力的な物語として構成してください。`
+        ]);
+        
+        const response = await result.response;
+        const text = response.text();
+        
+        if (text) {
+          console.log("Novel generation successful via Google Generative AI");
+          return res.json({ text });
+        }
+        
+      } catch (genAiError) {
+        console.error("Google Generative AI fallback failed:", genAiError);
+      }
+    }
+    
+    throw new Error("All novel generation methods failed");
+    
   } catch (error) {
     console.error("Novelize error:", error);
     res.status(500).json({ error: "Failed to generate novel content" });
@@ -86,13 +166,27 @@ app.post("/review", async (req, res) => {
       return res.status(400).json({ error: "original text and instruction are required" });
     }
 
-    const model = vertexAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+    console.log("Review requested for text length:", original.length);
     
-    const result = await model.generateContent({
-      contents: [{
-        role: "user",
-        parts: [{
-          text: `以下の文章を、ユーザー指示に従って修正・推敲してください。
+    try {
+      // Direct HTTP API call to Vertex AI (Gemini 1.5 Pro)
+      console.log("Trying direct HTTP API call to Vertex AI (Gemini 1.5 Pro)...");
+      
+      const authClient = await auth.getClient();
+      const tokenResponse = await authClient.getAccessToken();
+      const accessToken = tokenResponse.token;
+      
+      if (!accessToken) {
+        throw new Error("Failed to get access token");
+      }
+      
+      const apiUrl = `https://aiplatform.googleapis.com/v1/projects/${project}/locations/global/publishers/google/models/gemini-2.5-flash:generateContent`;
+      
+      const requestBody = {
+        contents: [{
+          role: "user",
+          parts: [{
+            text: `以下の文章を、ユーザー指示に従って修正・推敲してください。
 
 # 原文
 ${original}
@@ -101,15 +195,165 @@ ${original}
 ${instruction}
 
 出力は修正後の本文のみを返してください。説明は不要です。`
+          }]
         }]
-      }]
-    });
+      };
+      
+      console.log("Making direct API call to:", apiUrl);
+      
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json; charset=utf-8',
+        },
+        body: JSON.stringify(requestBody),
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Direct API call failed: ${response.status} ${response.statusText}\n${errorText}`);
+      }
+      
+      const apiResult: any = await response.json();
+      console.log("Direct HTTP API response received (Gemini 1.5 Pro)");
+      
+      const text = apiResult.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      
+      if (text) {
+        console.log("Review successful via direct HTTP API");
+        return res.json({ text });
+      }
+      
+    } catch (directApiError) {
+      console.error("Direct HTTP API call failed:", directApiError);
+    }
 
-    const text = result.response.candidates?.[0]?.content.parts[0]?.text || "";
-    res.json({ text });
+    // Fallback: Try Google Generative AI (if API key is available)
+    if (process.env.GOOGLE_API_KEY) {
+      console.log("Trying Google Generative AI as fallback...");
+      
+      try {
+        const directModel = genAI.getGenerativeModel({ 
+          model: "gemini-1.5-pro"
+        });
+        
+        const result = await directModel.generateContent([
+          `以下の文章を、ユーザー指示に従って修正・推敲してください。
+
+# 原文
+${original}
+
+# 修正指示
+${instruction}
+
+出力は修正後の本文のみを返してください。説明は不要です。`
+        ]);
+        
+        const response = await result.response;
+        const text = response.text();
+        
+        if (text) {
+          console.log("Review successful via Google Generative AI");
+          return res.json({ text });
+        }
+        
+      } catch (genAiError) {
+        console.error("Google Generative AI fallback failed:", genAiError);
+      }
+    }
+    
+    throw new Error("All review methods failed");
+    
   } catch (error) {
     console.error("Review error:", error);
-    res.status(500).json({ error: "Failed to review content" });
+    res.status(500).json({ error: "Failed to process review request" });
+  }
+});
+
+// テキスト埋め込み生成（Gemini 1.5 Pro）
+app.post("/embed", async (req, res) => {
+  try {
+    const { text } = req.body;
+    
+    if (!text) {
+      return res.status(400).json({ error: "text is required" });
+    }
+
+    try {
+      // Direct HTTP API call to Vertex AI (Gemini 1.5 Pro)
+      console.log("Trying direct HTTP API call for embedding...");
+      
+      const authClient = await auth.getClient();
+      const tokenResponse = await authClient.getAccessToken();
+      const accessToken = tokenResponse.token;
+      
+      if (!accessToken) {
+        throw new Error("Failed to get access token");
+      }
+      
+      const apiUrl = `https://aiplatform.googleapis.com/v1/projects/${project}/locations/global/publishers/google/models/text-embedding-004:generateContent`;
+      
+      const requestBody = {
+        contents: [{
+          role: "user",
+          parts: [{
+            text: text
+          }]
+        }]
+      };
+      
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json; charset=utf-8',
+        },
+        body: JSON.stringify(requestBody),
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Direct API call failed: ${response.status} ${response.statusText}\n${errorText}`);
+      }
+      
+      const apiResult: any = await response.json();
+      
+      // Extract embedding data
+      const embedding = apiResult.candidates?.[0]?.content?.parts?.[0]?.text || null;
+      
+      if (embedding) {
+        console.log("Embedding generation successful via direct HTTP API");
+        return res.json({ 
+          vector: embedding,
+          dimensions: embedding.length,
+          message: "Embedding generated successfully"
+        });
+      }
+      
+    } catch (directApiError) {
+      console.error("Direct HTTP API call failed:", directApiError);
+    }
+
+    // Fallback for embedding (using SDK)
+    const model = vertexAI.getGenerativeModel({ model: "text-embedding-004" });
+    const result = await model.generateContent({
+      contents: [{
+        role: "user",
+        parts: [{ text }]
+      }]
+    });
+    
+    res.json({ 
+      vector: result.response.candidates?.[0]?.content.parts[0]?.text || [],
+      dimensions: 768,
+      message: "Embedding generated successfully (SDK fallback)"
+    });
+
+    res.status(500).json({ error: "Failed to generate embedding" });
+  } catch (error) {
+    console.error("Embed error:", error);
+    res.status(500).json({ error: "Failed to generate embedding" });
   }
 });
 
@@ -140,89 +384,173 @@ Requirements:
 Create artwork suitable for a Japanese novel cover.`;
 
     try {
-      // Use Gemini 2.5 Flash Image for image generation (global region)
-      const imageModel = vertexAIGlobal.getGenerativeModel({ 
-        model: "gemini-2.5-flash-image-preview" 
-      });
-      
+      // Try direct HTTP API call to Vertex AI first (working method)
+      console.log("Trying direct HTTP API call to Vertex AI...");
       console.log("Calling Gemini 2.5 Flash Image model...");
       
-      const result = await imageModel.generateContent({
-        contents: [{
-          role: "user",
-          parts: [{
-            text: coverPrompt
-          }]
-        }],
-        generationConfig: {
-          maxOutputTokens: 8192,
-          temperature: 0.8,
+      try {
+        // Get access token using Google Auth
+        const authClient = await auth.getClient();
+        const tokenResponse = await authClient.getAccessToken();
+        const accessToken = tokenResponse.token;
+        
+        if (!accessToken) {
+          throw new Error("Failed to get access token");
         }
-      });
-      
-      const response = result.response;
-      console.log("Image generation response received");
-      
-      // Extract image data from response
-      let imageData = null;
-      let imageUrl = null;
-      
-      // Check for inline image data in the response
-      if (response.candidates && response.candidates[0]) {
-        const candidate = response.candidates[0];
-        if (candidate.content && candidate.content.parts) {
-          for (const part of candidate.content.parts) {
-            if (part.inlineData && part.inlineData.data) {
-              imageData = part.inlineData.data;
-              console.log("Image data found in response");
-              break;
+        
+        // Make direct HTTP request to Vertex AI API
+        const apiUrl = `https://aiplatform.googleapis.com/v1/projects/${project}/locations/global/publishers/google/models/gemini-2.5-flash-image-preview:generateContent`;
+        
+        const requestBody = {
+          contents: [{
+            role: "user",
+            parts: [{
+              text: coverPrompt
+            }]
+          }],
+          generation_config: {
+            response_modalities: ["TEXT", "IMAGE"]
+          }
+        };
+        
+        console.log("Making direct API call to:", apiUrl);
+        
+        // Use Node.js built-in fetch (available in Node 18+)
+        // Node.js built-in fetch is available without import
+        
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json; charset=utf-8',
+          },
+          body: JSON.stringify(requestBody),
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Direct API call failed: ${response.status} ${response.statusText}\n${errorText}`);
+        }
+        
+        const apiResult: any = await response.json();
+        console.log("Direct HTTP API response received");
+        
+        // Extract image data from response
+        let imageData = null;
+        
+        if (apiResult.candidates && apiResult.candidates[0]) {
+          const candidate = apiResult.candidates[0];
+          if (candidate.content && candidate.content.parts) {
+            for (const part of candidate.content.parts) {
+              if (part.inlineData && part.inlineData.data) {
+                imageData = part.inlineData.data;
+                console.log("Image data found in direct HTTP API response");
+                break;
+              }
             }
           }
         }
+        
+        if (imageData) {
+          // Save image to Google Cloud Storage
+          const timestamp = Date.now();
+          const randomId = Math.random().toString(36).substr(2, 9);
+          const fileName = `covers/cover_${timestamp}_${randomId}.png`;
+          const file = storage.bucket(bucketName).file(fileName);
+
+          // Convert base64 to buffer
+          const imageBuffer = Buffer.from(imageData, 'base64');
+          
+          await file.save(imageBuffer, {
+            metadata: {
+              contentType: 'image/png',
+              cacheControl: 'public, max-age=86400', // 24 hours cache
+            },
+          });
+
+          // Make the file publicly accessible
+          await file.makePublic();
+
+          // Generate public URL
+          const imageUrl = `https://storage.googleapis.com/${bucketName}/${fileName}`;
+          
+          console.log(`Cover image generated and saved via direct HTTP API: ${fileName}`);
+          
+          return res.json({ 
+            url: imageUrl,
+            message: "表紙画像が正常に生成されました（Direct HTTP API使用）",
+            success: true
+          });
+        }
+        
+      } catch (directApiError) {
+        console.error("Direct HTTP API call failed:", directApiError);
       }
-      
-      if (imageData) {
-        // Save image to Google Cloud Storage
-        const timestamp = Date.now();
-        const randomId = Math.random().toString(36).substr(2, 9);
-        const fileName = `covers/cover_${timestamp}_${randomId}.png`;
-        const file = storage.bucket(bucketName).file(fileName);
 
-        // Convert base64 to buffer
-        const imageBuffer = Buffer.from(imageData, 'base64');
+      // Try Google Generative AI (fallback with API key)
+      if (process.env.GOOGLE_API_KEY) {
+        console.log("Trying Google Generative AI with API key...");
         
-        await file.save(imageBuffer, {
-          metadata: {
-            contentType: 'image/png',
-            cacheControl: 'public, max-age=86400', // 24 hours cache
-          },
+        const directModel = genAI.getGenerativeModel({ 
+          model: "gemini-2.5-flash-image-preview"
         });
+        
+        const result = await directModel.generateContent([coverPrompt]);
+        const response = await result.response;
+        
+        console.log("Direct API response received");
+        
+        // Extract image data from response
+        let imageData = null;
+        
+        if (response.candidates && response.candidates[0]) {
+          const candidate = response.candidates[0];
+          if (candidate.content && candidate.content.parts) {
+            for (const part of candidate.content.parts) {
+              if (part.inlineData && part.inlineData.data) {
+                imageData = part.inlineData.data;
+                console.log("Image data found in direct API response");
+                break;
+              }
+            }
+          }
+        }
+        
+        if (imageData) {
+          // Save image to Google Cloud Storage
+          const timestamp = Date.now();
+          const randomId = Math.random().toString(36).substr(2, 9);
+          const fileName = `covers/cover_${timestamp}_${randomId}.png`;
+          const file = storage.bucket(bucketName).file(fileName);
 
-        // Make the file publicly accessible
-        await file.makePublic();
+          // Convert base64 to buffer
+          const imageBuffer = Buffer.from(imageData, 'base64');
+          
+          await file.save(imageBuffer, {
+            metadata: {
+              contentType: 'image/png',
+              cacheControl: 'public, max-age=86400', // 24 hours cache
+            },
+          });
 
-        // Generate public URL
-        imageUrl = `https://storage.googleapis.com/${bucketName}/${fileName}`;
-        
-        console.log(`Cover image generated and saved: ${fileName}`);
-        
-        res.json({ 
-          url: imageUrl,
-          message: "表紙画像が正常に生成されました",
-          success: true
-        });
-      } else {
-        // Fallback if no image data found
-        console.log("No image data found in response, returning placeholder");
-        res.json({
-          success: false,
-          url: "https://via.placeholder.com/400x600/4a3c28/daa520?text=表紙画像",
-          message: "画像生成中にエラーが発生しました。もう一度お試しください。"
-        });
+          // Make the file publicly accessible
+          await file.makePublic();
+
+          // Generate public URL
+          const imageUrl = `https://storage.googleapis.com/${bucketName}/${fileName}`;
+          
+          console.log(`Cover image generated and saved via direct API: ${fileName}`);
+          
+          return res.json({ 
+            url: imageUrl,
+            message: "表紙画像が正常に生成されました（Direct API使用）",
+            success: true
+          });
+        }
       }
       
     } catch (modelError) {
-      console.error("Gemini 2.5 Flash Image error:", modelError);
+      console.error("Image generation error:", modelError);
       
       // Fallback to text description with Gemini Pro
       console.log("Falling back to Gemini Pro for text description");
@@ -453,78 +781,6 @@ app.delete("/zines/:id", async (req, res) => {
 });
 
 // 9. 表紙画像生成エンドポイント
-app.post("/generate-cover", async (req, res) => {
-  try {
-    const { novelContent, title } = req.body;
-    
-    if (!novelContent || !title) {
-      return res.status(400).json({ error: "Novel content and title are required" });
-    }
-
-    console.log("Generating cover for novel:", title);
-
-    // Gemini Pro Vision モデルを使用（画像生成対応）
-    const model = vertexAI.getGenerativeModel({ 
-      model: "gemini-1.5-pro"
-    });
-
-    // 表紙デザイン説明生成用プロンプト
-    const coverPrompt = `小説「${title}」の表紙デザインの詳細な説明を作成してください。
-
-小説の内容：
-${novelContent}
-
-要求仕様：
-- 具体的なビジュアル要素の説明
-- 色調とテーマ
-- レイアウトとデザインスタイル
-- 雰囲気や印象
-
-この小説の内容を反映した魅力的で印象的な表紙デザインの説明を日本語で提供してください。実際の画像生成指示として使用できる詳細なものにしてください。`;
-
-    // Gemini で表紙説明を生成
-    const result = await model.generateContent({
-      contents: [{
-        role: "user", 
-        parts: [{
-          text: coverPrompt
-        }]
-      }],
-      generationConfig: {
-        maxOutputTokens: 1024,
-        temperature: 0.7,
-        topP: 0.9,
-        topK: 20
-      }
-    });
-
-    const response = result.response;
-    const coverDescription = response.candidates?.[0]?.content.parts[0]?.text || "";
-    
-    // プレースホルダー画像を生成（実際の画像生成サービスが利用可能になるまでの代替案）
-    const placeholderImageUrl = "https://via.placeholder.com/400x600/4a3c28/daa520?text=表紙画像";
-    
-    console.log("Cover description generated:", coverDescription);
-    
-    res.json({ 
-      success: true,
-      coverImageUrl: placeholderImageUrl,
-      description: coverDescription,
-      metadata: {
-        model: "gemini-1.5-pro",
-        timestamp: Date.now(),
-        type: "description_based"
-      }
-    });
-
-  } catch (error) {
-    console.error("Cover generation error:", error);
-    res.status(500).json({ 
-      error: "Failed to generate cover image",
-      details: error instanceof Error ? error.message : "Unknown error"
-    });
-  }
-});
 
 // Error handling middleware
 app.use((error: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
