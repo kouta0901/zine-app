@@ -25,11 +25,12 @@ import {
   Plus,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { novelize, saveZine, review } from "@/lib/api"
+import { novelize, saveZine, review, generateCover } from "@/lib/api"
 import { LoadingScreens } from "./LoadingScreens"
 import { ZineToolbar } from "./ZineToolbar"
 import { ZineCanvas } from "./ZineCanvas"
 import { ZineMenuPanel } from "./ZineMenuPanel"
+import { CoverGenerationModal } from "./CoverGenerationModal"
 import { ZineCreatorProps, Element, Page, ChatMessage, TextSelection, ReviewSuggestion, CreatorMode, MenuSection } from "@/types/zine"
 
 export function ZineCreator({ onBack }: ZineCreatorProps) {
@@ -46,6 +47,9 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
   const [isModifyingStyle, setIsModifyingStyle] = useState(false) // Loading state for style modifications
   const [isApplyingOnepoint, setIsApplyingOnepoint] = useState(false) // Loading state for onepoint advice
   const [isSaving, setIsSaving] = useState(false) // Loading state for save operation
+  const [isGeneratingCover, setIsGeneratingCover] = useState(false) // Loading state for cover image generation
+  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null) // Generated cover image URL
+  const [showCoverModal, setShowCoverModal] = useState(false) // Cover generation modal state
 
   const [pages, setPages] = useState<Page[]>([{ id: "page1", elements: [], title: "Page 1-2" }])
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
@@ -1376,6 +1380,39 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
     }
   }
 
+  const handleCoverGeneration = async () => {
+    if (!novelContent.trim()) {
+      alert("表紙を生成するには、まず小説を生成してください。")
+      return
+    }
+
+    setIsGeneratingCover(true)
+    try {
+      const result = await generateCover({
+        synopsis: novelContent
+      })
+      
+      if (result.url) {
+        setCoverImageUrl(result.url)
+      } else {
+        alert(result.message || "表紙画像の生成に失敗しました。")
+      }
+    } catch (error) {
+      console.error("表紙生成エラー:", error)
+      alert("表紙画像の生成に失敗しました。もう一度お試しください。")
+    } finally {
+      setIsGeneratingCover(false)
+    }
+  }
+
+  const handleOpenCoverModal = () => {
+    if (!novelContent.trim()) {
+      alert("表紙を生成するには、まず小説を生成してください。")
+      return
+    }
+    setShowCoverModal(true)
+  }
+
   return (
     <div className="min-h-screen" style={{
       background: "linear-gradient(135deg, #f7f1e8 0%, #f5ede1 25%, #f3e9d4 50%, #f1e5c7 75%, #ede0ba 100%)",
@@ -1385,6 +1422,7 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
         isGeneratingNovel={isGeneratingNovel}
         isModifyingStyle={isModifyingStyle}
         isApplyingOnepoint={isApplyingOnepoint}
+        isGeneratingCover={isGeneratingCover}
       />
 
       {showZineExamples && (
@@ -1837,6 +1875,9 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
                 totalNovelPages={novelPages.length}
                 onPreviousNovelPage={goToPreviousNovelPage}
                 onNextNovelPage={goToNextNovelPage}
+                onCoverGeneration={handleOpenCoverModal}
+                isGeneratingCover={isGeneratingCover}
+                hasNovelContent={!!novelContent.trim()}
               />
 
               {/* Main editing area */}
@@ -2066,6 +2107,41 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
                         </div>
                       </div>
                     </motion.div>
+                    
+                    {/* Cover Image Display Section */}
+                    {coverImageUrl && (
+                      <div className="mt-8 flex justify-center">
+                        <motion.div
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="relative"
+                        >
+                          <div className="text-center mb-4">
+                            <span className="text-sm" style={{ color: "#daa520", fontFamily: "serif" }}>
+                              Generated Cover
+                            </span>
+                          </div>
+                          <div className="relative" style={{
+                            background: "linear-gradient(145deg, #2c1810 0%, #3d2417 15%, #4a2c1a 30%, #3d2417 70%, #2c1810 100%)",
+                            padding: "20px",
+                            borderRadius: "12px",
+                            boxShadow: "0 8px 25px rgba(0,0,0,0.3)"
+                          }}>
+                            <img 
+                              src={coverImageUrl} 
+                              alt="Generated Book Cover"
+                              className="rounded-lg shadow-lg"
+                              style={{
+                                width: "250px",
+                                height: "350px",
+                                objectFit: "cover",
+                                border: "2px solid rgba(218, 165, 32, 0.3)"
+                              }}
+                            />
+                          </div>
+                        </motion.div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -2073,6 +2149,16 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
           )}
         </div>
       </div>
+      
+      {/* Cover Generation Modal */}
+      <CoverGenerationModal
+        isOpen={showCoverModal}
+        onClose={() => setShowCoverModal(false)}
+        isGenerating={isGeneratingCover}
+        coverImageUrl={coverImageUrl}
+        onGenerate={handleCoverGeneration}
+        novelTitle={zineTitle || "あなたの小説"}
+      />
     </div>
   )
 }

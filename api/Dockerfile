@@ -17,7 +17,6 @@ FROM node:20-alpine
 WORKDIR /app
 
 ENV NODE_ENV=production
-ENV GOOGLE_CLOUD_LOCATION=asia-northeast1
 ENV PORT=8080
 
 # Copy built application

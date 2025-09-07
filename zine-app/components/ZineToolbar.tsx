@@ -1,5 +1,5 @@
 import { motion } from "framer-motion"
-import { ArrowLeft, Save, Eye, ChevronLeft, ChevronRight, Plus } from "lucide-react"
+import { ArrowLeft, Save, Eye, ChevronLeft, ChevronRight, Plus, ImageIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { CreatorMode } from "@/types/zine"
@@ -23,6 +23,10 @@ interface ZineToolbarProps {
   totalNovelPages?: number
   onPreviousNovelPage?: () => void
   onNextNovelPage?: () => void
+  // Cover generation props for novel mode
+  onCoverGeneration?: () => void
+  isGeneratingCover?: boolean
+  hasNovelContent?: boolean
 }
 
 export function ZineToolbar({
@@ -41,7 +45,10 @@ export function ZineToolbar({
   currentNovelPage,
   totalNovelPages,
   onPreviousNovelPage,
-  onNextNovelPage
+  onNextNovelPage,
+  onCoverGeneration,
+  isGeneratingCover,
+  hasNovelContent
 }: ZineToolbarProps) {
   return (
     <motion.div
@@ -158,7 +165,7 @@ export function ZineToolbar({
             )}
           </motion.div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             {/* Save Button */}
             <Button
               size="sm"
@@ -172,6 +179,25 @@ export function ZineToolbar({
               <Save className="w-4 h-4 mr-2" />
               {isSaving ? "保存中..." : "保存"}
             </Button>
+            
+            {/* Cover Generation Button - Only show in novel mode */}
+            {mode === "novel" && onCoverGeneration && (
+              <Button
+                size="sm"
+                onClick={onCoverGeneration}
+                disabled={isGeneratingCover || !hasNovelContent}
+                className={`text-white border-0 font-medium shadow-sm ${(!hasNovelContent && !isGeneratingCover) ? 'opacity-50' : ''}`}
+                style={{
+                  background: (!hasNovelContent && !isGeneratingCover) 
+                    ? "linear-gradient(135deg, #6b5b47 0%, #7a6652 50%, #8b7355 100%)"
+                    : "linear-gradient(135deg, #8b6914 0%, #a0751f 50%, #b8860b 100%)"
+                }}
+                title={!hasNovelContent ? "まず小説を生成してから表紙を作成できます" : "小説の表紙画像を生成"}
+              >
+                <ImageIcon className="w-4 h-4 mr-2" />
+                {isGeneratingCover ? "生成中..." : "表紙生成"}
+              </Button>
+            )}
           </div>
         </div>
       </div>

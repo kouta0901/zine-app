@@ -71,13 +71,82 @@
 - [x] `test-component.tsx` 削除 (289B)
 - [x] 動作確認: 開発サーバー正常起動、TypeScriptコンパイル正常
 
-#### Phase 2: メインコンポーネント分割
-- [ ] `ZineCanvas.tsx` - キャンバス描画部分
-- [ ] `ZineMenuPanel.tsx` - サイドメニュー管理
-- [ ] `NovelEditor.tsx` - 小説モード専用
-- [ ] `AIAssistant.tsx` - AI機能統合
-- [ ] `ZineToolbar.tsx` - ツールバー・保存機能
-- [ ] 動作確認
+#### Phase 2: メインコンポーネント分割 ✅
+- [x] `ZineCanvas.tsx` - キャンバス描画部分（236行）
+- [x] `ZineMenuPanel.tsx` - サイドメニュー管理（430行）
+- [x] `ZineToolbar.tsx` - ツールバー・保存機能（219行）
+- [x] `LoadingScreens.tsx` - ローディング画面（168行）
+- [x] `types/zine.ts` - 型定義集約（49行）
+- [x] API統合関数 - handleStyleModify, handleOnepointModify追加
+- [x] メインファイル統合 - zine-creator.tsx大幅縮小
+- [x] TypeScriptコンパイル確認 - エラーなし
+- [x] 開発サーバー動作確認 - 正常稼働
+- [x] 本番ビルド確認 - 成功
+- [x] Gitコミット&プッシュ - 完了
+- [x] Cloud Run デプロイ完了 - 成功
+
+#### Phase 2.5: ヘッダーレイアウト修正 ✅ (16:20-16:45)
+- [x] **問題1**: ページナビゲーションの縦書きテキスト修正
+  - `ZineToolbar.tsx`: `whitespace-nowrap`と`writingMode: "horizontal-tb"`を追加
+  - 「ページ 1/3」が縦に表示されて幅が広がる問題を解決
+  - ZINEモード・小説モード両方に適用
+  
+- [x] **問題2**: 左サイドパネルのヘッダー重複修正  
+  - `ZineMenuPanel.tsx`: `pt-20`クラスを追加
+  - 「ZINE Mode」テキストがヘッダーに隠れる問題を解決
+  - 固定ヘッダーとの適切な間隔を確保
+
+- [x] Git コミット: 
+  - `1600f66`: "fix: Prevent vertical text layout in page navigation"
+  - `8a27fb8`: "fix: Add top padding to side panel to prevent header overlap"
+  
+- [x] Cloud Run デプロイ: Build `23cb97d9-b551-4152-9f60-feaec9b796fc` 成功 (6M40S)
+
+#### Phase 2.6: ズーム機能実装 ⚠️ (17:00-19:20) 
+**要求:** マウスパッド2本指でキャンバスを拡大・縮小して細かい編集を可能にする
+
+**実装試行:**
+1. **初回実装** (17:00-17:50)
+   - `ZineCanvas.tsx`: ピンチズーム機能追加
+   - wheelイベントとtouchイベントハンドラー実装
+   - ズーム範囲: 50%〜300%
+   - 問題: 画面全体がズームしてしまう
+
+2. **修正1** (17:50-18:30)
+   - ズーム対象を内部コンテンツのみに変更
+   - 問題: ユーザー要望と違い、白いページ自体がズームされない
+
+3. **修正2** (18:30-19:00)  
+   - パン（ドラッグ移動）機能追加
+   - キャンバスサイズ拡大（95%幅×90%高さ）
+   - 問題: まだ要素のみがズーム対象
+
+4. **修正3** (19:00-19:20)
+   - 白いページ全体（1400×900px）をズーム対象に変更
+   - 初期ズーム60%、範囲30%〜200%
+   - パン機能を全ズームレベルで有効化
+
+**コミット履歴:**
+- `58a32f7`: "feat: Add pinch zoom functionality to ZINE canvas"
+- `02cef7e`: "fix: Zoom only canvas content area instead of entire container"  
+- `187dac2`: "feat: Add pan functionality and increase canvas size"
+- `42ef659`: "fix: Properly implement zoom for entire white page canvas"
+
+**デプロイ:**
+- Build `3829ae1f-b5e2-4385-9c8f-7a1c8c4f4f8a` 成功
+- Build `48edec9f-7222-4e1f-b8c5-9a0c4d3e82e4` 成功
+- Build `3771c9cf-1f36-4ce6-b648-53a9a5d223ca` 成功
+- Build `a0e962d4-3b53-42f3-af7b-3ec9134adcd2` 成功
+
+**現状の問題点:** ❌
+- ズーム機能が期待通りに動作していない
+- ユーザーの要望: 白いページ全体を拡大・縮小して細かい編集作業をしたい
+- 実装の問題: ズーム・パンの挙動が不安定または正しく適用されていない可能性
+
+**次のステップ:**
+- ズーム機能の根本的な見直しが必要
+- ブラウザのネイティブズーム機能との競合を確認
+- デバッグとテストの強化
 
 #### Phase 3: 共通hooks抽出
 - [ ] `useZineState.ts` - 状態管理
