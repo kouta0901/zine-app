@@ -20,25 +20,30 @@ interface ZineGalleryProps {
   zines: Zine[]
   onZineSelect: (zine: Zine) => void
   onCreateNew: () => void
-  mouseX: MotionValue<number>
-  mouseY: MotionValue<number>
+  mouseX?: MotionValue<number>
+  mouseY?: MotionValue<number>
 }
 
 export function ZineGallery({ zines, onZineSelect, onCreateNew, mouseX, mouseY }: ZineGalleryProps) {
   const myBooks = zines.filter((zine) => zine.isOwned)
   const otherBooks = zines.filter((zine) => !zine.isOwned)
 
-  // Parallax effect based on mouse position
-  const parallaxX = useTransform(mouseX, [0, typeof window !== "undefined" ? window.innerWidth : 1920], [-20, 20])
-  const parallaxY = useTransform(mouseY, [0, typeof window !== "undefined" ? window.innerHeight : 1080], [-10, 10])
+  // Parallax effect based on mouse position (optional)
+  const hasMotion = Boolean(mouseX) && Boolean(mouseY)
+  const parallaxX = hasMotion
+    ? useTransform(mouseX as MotionValue<number>, [0, typeof window !== "undefined" ? window.innerWidth : 1920], [-20, 20])
+    : undefined
+  const parallaxY = hasMotion
+    ? useTransform(mouseY as MotionValue<number>, [0, typeof window !== "undefined" ? window.innerHeight : 1080], [-10, 10])
+    : undefined
 
   return (
     <div className="relative min-h-screen px-6 py-8">
       <motion.div
         className="max-w-7xl mx-auto"
         style={{
-          x: parallaxX,
-          y: parallaxY,
+          x: parallaxX ?? 0,
+          y: parallaxY ?? 0,
         }}
       >
         <motion.section
@@ -60,7 +65,7 @@ export function ZineGallery({ zines, onZineSelect, onCreateNew, mouseX, mouseY }
               data-cursor-hover
             >
               <Plus className="w-5 h-5" />
-              Create New
+              本を新規作成
             </motion.button>
           </div>
 

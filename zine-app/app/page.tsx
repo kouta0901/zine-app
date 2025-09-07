@@ -81,22 +81,22 @@ export default function ZineApp() {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedGenre, setSelectedGenre] = useState("All")
 
+  // Disable mouse-driven motion to prevent subtle UI movement
+  const enableMouseMotion = false
   const mouseX = useMotionValue(0)
   const mouseY = useMotionValue(0)
   const springX = useSpring(mouseX, { stiffness: 300, damping: 30 })
   const springY = useSpring(mouseY, { stiffness: 300, damping: 30 })
 
   useEffect(() => {
-    if (typeof window === "undefined") return
-
+    if (typeof window === "undefined" || !enableMouseMotion) return
     const handleMouseMove = (e: MouseEvent) => {
       mouseX.set(e.clientX)
       mouseY.set(e.clientY)
     }
-
     window.addEventListener("mousemove", handleMouseMove)
     return () => window.removeEventListener("mousemove", handleMouseMove)
-  }, [mouseX, mouseY])
+  }, [mouseX, mouseY, enableMouseMotion])
 
   const filteredZines = mockZines.filter((zine) => {
     const matchesSearch =
@@ -133,7 +133,7 @@ export default function ZineApp() {
       )`,
       color: "#4a3c28"
     }}>
-      <CustomCursor mouseX={springX} mouseY={springY} />
+      {enableMouseMotion && <CustomCursor mouseX={springX} mouseY={springY} />}
 
       {/* Library atmosphere overlay */}
       <div className="fixed inset-0 opacity-[0.03] pointer-events-none">
@@ -237,8 +237,8 @@ export default function ZineApp() {
                 zines={filteredZines}
                 onZineSelect={handleZineSelect}
                 onCreateNew={handleCreateNew}
-                mouseX={mouseX}
-                mouseY={mouseY}
+                mouseX={enableMouseMotion ? mouseX : undefined}
+                mouseY={enableMouseMotion ? mouseY : undefined}
               />
             </div>
           </motion.div>

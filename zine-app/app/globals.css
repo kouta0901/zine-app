@@ -123,7 +123,7 @@
   }
   body {
     @apply bg-background text-foreground;
-    cursor: none; /* Hide default cursor for custom cursor */
+    cursor: auto; /* Show default cursor (custom cursor disabled) */
     /* Enhanced antique library background texture */
     background-image: radial-gradient(circle at 20% 30%, rgba(101, 67, 33, 0.08) 0%, transparent 40%),
       radial-gradient(circle at 80% 70%, rgba(139, 69, 19, 0.06) 0%, transparent 40%),
