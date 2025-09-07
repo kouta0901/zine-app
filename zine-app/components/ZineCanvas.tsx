@@ -13,6 +13,8 @@ interface ZineCanvasProps {
   setDraggedElement: (id: string | null) => void
   dragOffset: { x: number; y: number }
   setDragOffset: (offset: { x: number; y: number }) => void
+  onAddTextAt?: (x: number, y: number) => void
+  onAddImageAt?: (x: number, y: number) => void
 }
 
 export function ZineCanvas({
@@ -23,13 +25,17 @@ export function ZineCanvas({
   draggedElement,
   setDraggedElement,
   dragOffset,
-  setDragOffset
+  setDragOffset,
+  onAddTextAt,
+  onAddImageAt
 }: ZineCanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null)
   const [zoom, setZoom] = useState(0.6) // Start with smaller zoom to fit screen
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 })
   const [isPanning, setIsPanning] = useState(false)
   const [lastPanPoint, setLastPanPoint] = useState({ x: 0, y: 0 })
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [menuPos, setMenuPos] = useState({ x: 0, y: 0 })
   const minZoom = 0.3
   const maxZoom = 2
 
@@ -132,6 +138,32 @@ export function ZineCanvas({
         
         updateElement(draggedElement, { x: constrainedX, y: constrainedY })
       }
+    }
+  }
+
+  // Handle click to open add menu when not on element
+  const handleCanvasClick = (e: React.MouseEvent) => {
+    if (!canvasRef.current) return
+    // If we were dragging, do not open menu
+    if (draggedElement) return
+    const rect = canvasRef.current.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+    setMenuPos({ x, y })
+    setMenuOpen(true)
+  }
+
+  const placeTextHere = () => {
+    setMenuOpen(false)
+    if (onAddTextAt) {
+      onAddTextAt(menuPos.x, menuPos.y)
+    }
+  }
+
+  const placeImageHere = () => {
+    setMenuOpen(false)
+    if (onAddImageAt) {
+      onAddImageAt(menuPos.x, menuPos.y)
     }
   }
 
@@ -250,6 +282,7 @@ export function ZineCanvas({
             <div 
               ref={canvasRef}
               className="absolute inset-0 p-8"
+              onClick={handleCanvasClick}
             >
               {/* Render page elements */}
               {currentPage.elements.map((element) => (
@@ -257,7 +290,7 @@ export function ZineCanvas({
                   key={element.id}
                   className={`absolute cursor-move border-2 ${
                     selectedElement === element.id ? "border-purple-500 shadow-lg" : "border-transparent"
-                  } hover:border-purple-300 transition-all duration-200`}
+                  } hover:border-purple-300 ${draggedElement === element.id ? "transition-none" : "transition-colors duration-150"}`}
                   style={{
                     left: element.x,
                     top: element.y,
@@ -338,6 +371,20 @@ export function ZineCanvas({
                 </div>
               )}
             </div>
+            {/* Context menu for add */}
+            {menuOpen && (
+              <div
+                className="absolute bg-white/95 rounded-md shadow-lg border z-50"
+                style={{ left: menuPos.x + 8, top: menuPos.y + 8, borderColor: "#e5dcc9" }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex flex-col">
+                  <button className="px-3 py-2 text-sm hover:bg-amber-50 text-gray-700 text-left" onClick={placeTextHere}>テキストを追加</button>
+                  <button className="px-3 py-2 text-sm hover:bg-amber-50 text-gray-700 text-left" onClick={placeImageHere}>画像を追加</button>
+                  <button className="px-3 py-2 text-xs hover:bg-amber-50 text-gray-500 text-left" onClick={() => setMenuOpen(false)}>閉じる</button>
+                </div>
+              </div>
+            )}
           </motion.div>
         </div>
       </motion.div>

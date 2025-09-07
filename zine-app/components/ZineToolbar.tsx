@@ -90,48 +90,7 @@ export function ZineToolbar({
               }}
             />
             
-            {/* Page Navigation for ZINE mode */}
-            {mode === "zine" && currentPageIndex !== undefined && totalPages && (
-              <div className="flex items-center gap-2 ml-6">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={onPreviousPage}
-                  disabled={currentPageIndex === 0}
-                  className="text-opacity-80 hover:text-opacity-100 transition-all duration-200"
-                  style={{ color: currentPageIndex === 0 ? "#ccc" : "#4a3c28" }}
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </Button>
-                
-                <span className="text-sm px-3 whitespace-nowrap" style={{ color: "#8b7355", writingMode: "horizontal-tb" }}>
-                  ページ {currentPageIndex + 1} / {totalPages}
-                </span>
-                
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={onNextPage}
-                  disabled={currentPageIndex === totalPages - 1}
-                  className="text-opacity-80 hover:text-opacity-100 transition-all duration-200"
-                  style={{ color: currentPageIndex === totalPages - 1 ? "#ccc" : "#4a3c28" }}
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </Button>
-                
-                {onAddPage && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={onAddPage}
-                    className="text-opacity-80 hover:text-opacity-100 transition-all duration-200 ml-2"
-                    style={{ color: "#4a3c28" }}
-                  >
-                    <Plus className="w-4 h-4" />
-                  </Button>
-                )}
-              </div>
-            )}
+            {/* Page Navigation for ZINE mode moved below editor */}
             
             {/* Novel Page Navigation */}
             {mode === "novel" && currentNovelPage && totalNovelPages && totalNovelPages > 0 && (

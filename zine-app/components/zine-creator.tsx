@@ -210,6 +210,14 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
   const goToNextPage = () => {
     if (currentPageIndex < pages.length - 1) {
       setCurrentPageIndex(currentPageIndex + 1)
+    } else {
+      const newPage: Page = {
+        id: `page${pages.length}`,
+        elements: [],
+        title: `Page ${pages.length * 2 + 1}-${pages.length * 2 + 2}`,
+      }
+      setPages((prev) => [...prev, newPage])
+      setCurrentPageIndex(pages.length)
     }
   }
 
@@ -255,12 +263,12 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
     }
   }
 
-  const addTextElement = () => {
+  const addTextElement = (x?: number, y?: number) => {
     const newElement: Element = {
       id: Date.now().toString(),
       type: "text",
-      x: 50,
-      y: 100,
+      x: x ?? 50,
+      y: y ?? 100,
       width: 200,
       height: 50,
       content: "クリックして編集",
@@ -276,7 +284,7 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
     setSelectedElement(newElement.id)
   }
 
-  const addImageElement = () => {
+  const addImageElement = (x?: number, y?: number) => {
     const input = document.createElement('input')
     input.type = 'file'
     input.accept = 'image/*'
@@ -288,8 +296,8 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
           const newElement: Element = {
             id: Date.now().toString(),
             type: "image",
-            x: 100,
-            y: 150,
+            x: x ?? 100,
+            y: y ?? 150,
             width: 200,
             height: 150,
             src: event.target?.result as string,
@@ -343,6 +351,14 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
     }))
     setPages(updatedPages)
     setSelectedElement(null)
+  }
+
+  // Delete key handler
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if ((e.key === 'Delete' || e.key === 'Backspace') && selectedElement) {
+      e.preventDefault()
+      deleteElement(selectedElement)
+    }
   }
 
   const themeStyles = {
@@ -1830,6 +1846,12 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
           onAddImageElement={addImageElement}
           onDeleteElement={deleteElement}
           onNovelize={handleNovelize}
+          conceptConfig={conceptConfig}
+          setConceptConfig={setConceptConfig}
+          aiWriterConfig={aiWriterConfig}
+          setAiWriterConfig={setAiWriterConfig}
+          worldviewConfig={worldviewConfig}
+          setWorldviewConfig={setWorldviewConfig}
           reviewChatMessages={reviewChatMessages}
           reviewChatInput={reviewChatInput}
           setReviewChatInput={setReviewChatInput}
@@ -1841,7 +1863,7 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
         />
 
         {/* Main Content */}
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col" onKeyDown={handleKeyDown} tabIndex={0}>
           {showConfigPanel && mode === "zine" ? (
             <div className="flex-1 p-8">
               <Button
@@ -1894,6 +1916,8 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
                     setDraggedElement={setDraggedElement}
                     dragOffset={dragOffset}
                     setDragOffset={setDragOffset}
+                    onAddTextAt={(x, y) => addTextElement(x, y)}
+                    onAddImageAt={(x, y) => addImageElement(x, y)}
                   />
                 ) : (
                   <div className="w-full max-w-7xl mx-auto perspective-1000">
@@ -2145,6 +2169,38 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
                   </div>
                 )}
               </div>
+
+              {/* Moved Page Navigation for ZINE mode below editor */}
+              {mode === "zine" && (
+                <div className="w-full flex items-center justify-center mt-6 mb-4">
+                  <div className="flex items-center gap-3">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={goToPreviousPage}
+                      disabled={currentPageIndex === 0}
+                      className="transition-all duration-200"
+                      style={{ color: currentPageIndex === 0 ? "#b5a899" : "#3a2f24" }}
+                    >
+                      <ChevronLeft className="w-5 h-5" />
+                    </Button>
+                    <span className="text-base font-medium px-3 whitespace-nowrap" style={{ color: "#4a3c28" }}>
+                      ページ {currentPageIndex + 1} / {pages.length}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={goToNextPage}
+                      disabled={false}
+                      className="transition-all duration-200"
+                      style={{ color: "#3a2f24" }}
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </Button>
+                    {/* '+' button removed; next button now appends a page at the end */}
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>

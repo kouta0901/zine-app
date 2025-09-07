@@ -38,6 +38,13 @@ interface ZineMenuPanelProps {
   onAddImageElement: () => void
   onDeleteElement: (id: string) => void
   onNovelize: () => void
+  // ZINE configuration states (rendered in the left panel)
+  conceptConfig: { length: string; genre: string; keywords: string }
+  setConceptConfig: (cfg: { length: string; genre: string; keywords: string }) => void
+  aiWriterConfig: { values: string; rules: string }
+  setAiWriterConfig: (cfg: { values: string; rules: string }) => void
+  worldviewConfig: { image: string; characterName: string; personality: string; scenario: string }
+  setWorldviewConfig: (cfg: { image: string; characterName: string; personality: string; scenario: string }) => void
   // Writer Review Panel props
   reviewChatMessages: ChatMessage[]
   reviewChatInput: string
@@ -80,6 +87,12 @@ export function ZineMenuPanel({
   onAddImageElement,
   onDeleteElement,
   onNovelize,
+  conceptConfig,
+  setConceptConfig,
+  aiWriterConfig,
+  setAiWriterConfig,
+  worldviewConfig,
+  setWorldviewConfig,
   reviewChatMessages,
   reviewChatInput,
   setReviewChatInput,
@@ -303,61 +316,82 @@ export function ZineMenuPanel({
             </div>
           )}
 
-          {/* Menu sections */}
+          {/* Interleaved buttons and panels so form appears directly under each item */}
           <div className="space-y-2">
             {zineMenuSections.map((section) => (
-              <Button
-                key={section.id}
-                variant={activeMenuSection === section.id ? "default" : "ghost"}
-                className="w-full justify-start"
-                style={{
-                  background: activeMenuSection === section.id ? "linear-gradient(135deg, #8b6914 0%, #a0751f 100%)" : "transparent",
-                  color: activeMenuSection === section.id ? "#fffdf7" : "#8b7355"
-                }}
-                onClick={() => onMenuSectionClick(section.id)}
-              >
-                <section.icon className="w-4 h-4 mr-2" />
-                {section.label}
-              </Button>
+              <div key={section.id}>
+                <Button
+                  variant={activeMenuSection === section.id ? "default" : "ghost"}
+                  className="w-full justify-start"
+                  style={{
+                    background: activeMenuSection === section.id ? "linear-gradient(135deg, #8b6914 0%, #a0751f 100%)" : "transparent",
+                    color: activeMenuSection === section.id ? "#fffdf7" : "#8b7355"
+                  }}
+                  onClick={() => setActiveMenuSection(activeMenuSection === section.id ? null : section.id)}
+                >
+                  <section.icon className="w-4 h-4 mr-2" />
+                  {section.label}
+                </Button>
+                {activeMenuSection === section.id && (
+                  <div className="mt-3 p-3 rounded-lg border" style={{ borderColor: "rgba(139, 115, 85, 0.3)", background: "rgba(255,253,250,0.7)" }}>
+                    {section.id === 'concept' && (
+                      <div className="space-y-3">
+                        <div>
+                          <div className="text-xs mb-1" style={{ color: '#8b7355' }}>短編 / 長編</div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <Button size="sm" variant={conceptConfig.length === 'short' ? 'default' : 'outline'} onClick={() => setConceptConfig({ ...conceptConfig, length: 'short' })}>短編</Button>
+                            <Button size="sm" variant={conceptConfig.length === 'long' ? 'default' : 'outline'} onClick={() => setConceptConfig({ ...conceptConfig, length: 'long' })}>長編</Button>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs mb-1" style={{ color: '#8b7355' }}>ジャンル</div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <Button size="sm" variant={conceptConfig.genre === 'sf' ? 'default' : 'outline'} onClick={() => setConceptConfig({ ...conceptConfig, genre: 'sf' })}>SF</Button>
+                            <Button size="sm" variant={conceptConfig.genre === 'romance' ? 'default' : 'outline'} onClick={() => setConceptConfig({ ...conceptConfig, genre: 'romance' })}>ラブコメ</Button>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs mb-1" style={{ color: '#8b7355' }}>キーワード</div>
+                          <Input value={conceptConfig.keywords} onChange={(e) => setConceptConfig({ ...conceptConfig, keywords: (e.target as HTMLInputElement).value })} placeholder="作品のキーワード…" />
+                        </div>
+                      </div>
+                    )}
+                    {section.id === 'ai-writer' && (
+                      <div className="space-y-3">
+                        <div>
+                          <div className="text-xs mb-1" style={{ color: '#8b7355' }}>価値観</div>
+                          <Input value={aiWriterConfig.values} onChange={(e) => setAiWriterConfig({ ...aiWriterConfig, values: (e.target as HTMLInputElement).value })} placeholder="AI作家の価値観…" />
+                        </div>
+                        <div>
+                          <div className="text-xs mb-1" style={{ color: '#8b7355' }}>対話ルール</div>
+                          <Input value={aiWriterConfig.rules} onChange={(e) => setAiWriterConfig({ ...aiWriterConfig, rules: (e.target as HTMLInputElement).value })} placeholder="対話のルール…" />
+                        </div>
+                      </div>
+                    )}
+                    {section.id === 'worldview' && (
+                      <div className="space-y-3">
+                        <div>
+                          <div className="text-xs mb-1" style={{ color: '#8b7355' }}>人物名前</div>
+                          <Input value={worldviewConfig.characterName} onChange={(e) => setWorldviewConfig({ ...worldviewConfig, characterName: (e.target as HTMLInputElement).value })} placeholder="主要人物の名前…" />
+                        </div>
+                        <div>
+                          <div className="text-xs mb-1" style={{ color: '#8b7355' }}>性格</div>
+                          <Input value={worldviewConfig.personality} onChange={(e) => setWorldviewConfig({ ...worldviewConfig, personality: (e.target as HTMLInputElement).value })} placeholder="性格…" />
+                        </div>
+                        <div>
+                          <div className="text-xs mb-1" style={{ color: '#8b7355' }}>シナリオ</div>
+                          <Input value={worldviewConfig.scenario} onChange={(e) => setWorldviewConfig({ ...worldviewConfig, scenario: (e.target as HTMLInputElement).value })} placeholder="ストーリーライン…" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             ))}
           </div>
 
           {!showConfigPanel && (
             <>
-              <div className="mt-6 pt-6 border-t" style={{ borderColor: "rgba(139, 115, 85, 0.3)" }}>
-                <h3 className="text-sm font-semibold mb-3" style={{ color: "#4a3c28" }}>ツール</h3>
-                <div className="space-y-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full justify-start"
-                    style={{
-                      color: "#8b7355",
-                      borderColor: "rgba(139, 115, 85, 0.3)",
-                      backgroundColor: "transparent"
-                    }}
-                    onClick={onAddTextElement}
-                  >
-                    <Type className="w-4 h-4 mr-2" />
-                    テキスト追加
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full justify-start"
-                    style={{
-                      color: "#8b7355",
-                      borderColor: "rgba(139, 115, 85, 0.3)",
-                      backgroundColor: "transparent"
-                    }}
-                    onClick={onAddImageElement}
-                  >
-                    <ImageIcon className="w-4 h-4 mr-2" />
-                    画像追加
-                  </Button>
-                </div>
-              </div>
-
               {selectedElement && (
                 <div className="mt-6 pt-6 border-t" style={{ borderColor: "rgba(139, 115, 85, 0.3)" }}>
                   <h3 className="text-sm font-semibold mb-3" style={{ color: "#4a3c28" }}>選択中の要素</h3>
