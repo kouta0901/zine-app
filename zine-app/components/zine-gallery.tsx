@@ -4,6 +4,7 @@ import { motion, type MotionValue, useTransform } from "framer-motion"
 import { useState } from "react"
 import { User, Calendar, BookOpen, Plus } from "lucide-react"
 import { format } from "date-fns"
+import { WorksInProgressWrapper } from "./works-in-progress-wrapper"
 
 interface Zine {
   id: string
@@ -20,11 +21,12 @@ interface ZineGalleryProps {
   zines: Zine[]
   onZineSelect: (zine: Zine) => void
   onCreateNew: () => void
+  onWorkSelect?: (work: any) => void
   mouseX?: MotionValue<number>
   mouseY?: MotionValue<number>
 }
 
-export function ZineGallery({ zines, onZineSelect, onCreateNew, mouseX, mouseY }: ZineGalleryProps) {
+export function ZineGallery({ zines, onZineSelect, onCreateNew, onWorkSelect, mouseX, mouseY }: ZineGalleryProps) {
   const myBooks = zines.filter((zine) => zine.isOwned)
   const otherBooks = zines.filter((zine) => !zine.isOwned)
 
@@ -46,6 +48,9 @@ export function ZineGallery({ zines, onZineSelect, onCreateNew, mouseX, mouseY }
           y: parallaxY ?? 0,
         }}
       >
+        {/* Works in Progress Section */}
+        {onWorkSelect && <WorksInProgressWrapper onWorkSelect={onWorkSelect} />}
+
         <motion.section
           className="mb-16"
           initial={{ opacity: 0, y: 50 }}

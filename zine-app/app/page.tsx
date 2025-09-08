@@ -81,6 +81,20 @@ export default function ZineApp() {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedGenre, setSelectedGenre] = useState("All")
 
+  const handleWorkSelect = (work: any) => {
+    // Navigate to appropriate creator based on work type
+    if (work.type === 'zine') {
+      // TODO: Load ZINE data and navigate to ZINE creator
+      console.log('Opening ZINE:', work)
+      setViewMode("creator")
+    } else if (work.type === 'novel') {
+      // TODO: Load novel data and navigate to novel creator
+      console.log('Opening Novel:', work)
+      // For now, we'll use the same creator - in the future this should be a different component
+      setViewMode("creator")
+    }
+  }
+
   // Disable mouse-driven motion to prevent subtle UI movement
   const enableMouseMotion = false
   const mouseX = useMotionValue(0)
@@ -210,6 +224,7 @@ export default function ZineApp() {
                 zines={filteredZines}
                 onZineSelect={handleZineSelect}
                 onCreateNew={handleCreateNew}
+                onWorkSelect={handleWorkSelect}
                 mouseX={enableMouseMotion ? mouseX : undefined}
                 mouseY={enableMouseMotion ? mouseY : undefined}
               />

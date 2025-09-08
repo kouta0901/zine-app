@@ -41,6 +41,7 @@ export async function review(payload: {
 // 表紙画像生成機能
 export async function generateCover(payload: {
   synopsis: string;
+  title?: string;
 }): Promise<{ url: string; message?: string }> {
   return apiCall("/cover", payload);
 }
@@ -62,7 +63,51 @@ export async function healthCheck(): Promise<{ ok: boolean; timestamp: string }>
 
 // ZINE保存
 export async function saveZine(zineData: any): Promise<{ id: string; message: string }> {
-  return apiCall("/zines", zineData);
+  try {
+    // Save to API server
+    const result = await apiCall("/zines", zineData);
+    
+    // Also save to localStorage for local access (client-side only)
+    if (typeof window !== 'undefined') {
+      const localData = {
+        ...zineData,
+        id: result.id,
+        lastModified: new Date().toISOString(),
+        type: 'zine'
+      };
+      
+      localStorage.setItem(`zine_${result.id}`, JSON.stringify(localData));
+      
+      // Trigger storage event for other components
+      window.dispatchEvent(new Event('storage'));
+      window.dispatchEvent(new Event('localStorageUpdate'));
+    }
+    
+    return result;
+  } catch (error) {
+    // If API fails, still try to save locally (client-side only)
+    if (typeof window !== 'undefined') {
+      const fallbackId = `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const localData = {
+        ...zineData,
+        id: fallbackId,
+        lastModified: new Date().toISOString(),
+        type: 'zine',
+        isLocalOnly: true
+      };
+      
+      localStorage.setItem(`zine_${fallbackId}`, JSON.stringify(localData));
+      window.dispatchEvent(new Event('storage'));
+      window.dispatchEvent(new Event('localStorageUpdate'));
+      
+      // Re-throw the original error but with local save success
+      console.warn('API save failed, saved locally instead:', error);
+      return { id: fallbackId, message: 'Saved locally (API unavailable)' };
+    }
+    
+    // If we're on server side, just throw the original error
+    throw error;
+  }
 }
 
 // ZINE一覧取得
@@ -111,4 +156,41 @@ export async function deleteZine(id: string): Promise<{ id: string; message: str
   }
 
   return response.json();
+}
+
+// Novel保存機能
+export async function saveNovel(novelData: any): Promise<{ id: string; message: string }> {
+  try {
+    // For now, we don't have a novel API endpoint, so save locally only
+    // TODO: Implement novel API endpoint in the future
+    if (typeof window !== 'undefined') {
+      const novelId = `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const localData = {
+        ...novelData,
+        id: novelId,
+        lastModified: new Date().toISOString(),
+        type: 'novel'
+      };
+      
+      localStorage.setItem(`novel_${novelId}`, JSON.stringify(localData));
+      window.dispatchEvent(new Event('storage'));
+      window.dispatchEvent(new Event('localStorageUpdate'));
+      
+      return { id: novelId, message: 'Novel saved successfully' };
+    }
+    
+    // If we're on server side, return a placeholder response
+    const serverId = `server_${Date.now()}`;
+    return { id: serverId, message: 'Novel save deferred to client' };
+  } catch (error) {
+    console.error('Failed to save novel:', error);
+    throw error;
+  }
+}
+
+// Novel一覧取得 (将来のAPI実装用)
+export async function getNovels(): Promise<{ novels: any[] }> {
+  // TODO: Implement novel API endpoint
+  // For now, return empty array since we don't have novel API
+  return { novels: [] };
 }

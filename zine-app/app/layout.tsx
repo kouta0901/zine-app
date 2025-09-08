@@ -26,9 +26,14 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  // Create consistent class string to avoid hydration mismatch
+  const htmlClassName = [inter.variable, playfair.variable].join(' ')
+  
   return (
-    <html lang="en" className={`${inter.variable} ${playfair.variable} dark`}>
-      <body className="font-sans antialiased bg-background">{children}</body>
+    <html lang="en" className={htmlClassName} suppressHydrationWarning>
+      <body className="font-sans antialiased bg-background dark" suppressHydrationWarning>
+        {children}
+      </body>
     </html>
   )
 }

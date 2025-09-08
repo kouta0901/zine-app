@@ -1,7 +1,8 @@
 "use client"
 
+import React from "react"
 import { motion } from "framer-motion"
-import { useRef, useState, useCallback } from "react"
+import { useRef, useState, useCallback, useEffect } from "react"
 import { Element, Page } from "@/types/zine"
 
 interface ZineCanvasProps {
@@ -36,32 +37,50 @@ export function ZineCanvas({
   const [lastPanPoint, setLastPanPoint] = useState({ x: 0, y: 0 })
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPos, setMenuPos] = useState({ x: 0, y: 0 })
-  const minZoom = 0.3
-  const maxZoom = 2
+  const [resizingElement, setResizingElement] = useState<string | null>(null)
+  const [resizeHandle, setResizeHandle] = useState<string | null>(null)
+  const [initialResize, setInitialResize] = useState({ width: 0, height: 0, x: 0, y: 0, mouseX: 0, mouseY: 0 })
+  
+  // Improved zoom and touch handling
+  const touchState = useRef({ initialDistance: 0, initialZoom: 0, lastDistance: 0 })
+  const minZoom = 0.2
+  const maxZoom = 3
 
-  // Handle zoom with wheel/trackpad
+  // Handle zoom with wheel/trackpad - properly handle passive events
   const handleWheel = useCallback((e: React.WheelEvent) => {
-    // Check if it's a pinch gesture (ctrlKey indicates pinch on trackpad)
-    // Also detect if deltaY is small and ctrlKey is present (macOS trackpad pinch)
-    if (e.ctrlKey || (Math.abs(e.deltaY) < 50 && e.ctrlKey)) {
-      e.preventDefault()
+    // Check if we're over the canvas area
+    const isOverCanvas = (e.target as HTMLElement).closest('.relative.rounded-xl') !== null
+    
+    if (isOverCanvas) {
+      // For passive events, don't use preventDefault, just update zoom
       const delta = -e.deltaY * 0.01
       const newZoom = Math.max(minZoom, Math.min(maxZoom, zoom + delta))
       setZoom(newZoom)
     }
   }, [zoom, minZoom, maxZoom])
+  
+  // Add direct event listener for non-passive wheel events
+  useEffect(() => {
+    const canvasElement = canvasRef.current
+    if (!canvasElement) return
+    
+    const handleNativeWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      const delta = -e.deltaY * 0.01
+      setZoom(prevZoom => Math.max(minZoom, Math.min(maxZoom, prevZoom + delta)))
+    }
+    
+    canvasElement.addEventListener('wheel', handleNativeWheel, { passive: false })
+    
+    return () => {
+      canvasElement.removeEventListener('wheel', handleNativeWheel)
+    }
+  }, [minZoom, maxZoom])
 
-  // Handle touch gestures for mobile
+  // Handle touch gestures for mobile - improved pinch-to-zoom
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     if (e.touches.length === 2) {
       e.preventDefault()
-    }
-  }, [])
-
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (e.touches.length === 2) {
-      e.preventDefault()
-      // Calculate distance between two fingers
       const touch1 = e.touches[0]
       const touch2 = e.touches[1]
       const distance = Math.sqrt(
@@ -69,31 +88,46 @@ export function ZineCanvas({
         Math.pow(touch2.clientY - touch1.clientY, 2)
       )
       
-      // Store initial distance if not set
-      if (!canvasRef.current?.dataset.initialDistance) {
-        canvasRef.current!.dataset.initialDistance = distance.toString()
-        canvasRef.current!.dataset.initialZoom = zoom.toString()
-      } else {
-        const initialDistance = parseFloat(canvasRef.current.dataset.initialDistance)
-        const initialZoom = parseFloat(canvasRef.current.dataset.initialZoom)
-        const scale = distance / initialDistance
-        const newZoom = Math.max(minZoom, Math.min(maxZoom, initialZoom * scale))
-        setZoom(newZoom)
+      touchState.current = {
+        initialDistance: distance,
+        initialZoom: zoom,
+        lastDistance: distance
       }
     }
-  }, [zoom, minZoom, maxZoom])
+  }, [zoom])
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      e.preventDefault()
+      const touch1 = e.touches[0]
+      const touch2 = e.touches[1]
+      const distance = Math.sqrt(
+        Math.pow(touch2.clientX - touch1.clientX, 2) + 
+        Math.pow(touch2.clientY - touch1.clientY, 2)
+      )
+      
+      if (touchState.current.initialDistance > 0) {
+        const scale = distance / touchState.current.initialDistance
+        const newZoom = Math.max(minZoom, Math.min(maxZoom, touchState.current.initialZoom * scale))
+        setZoom(newZoom)
+        touchState.current.lastDistance = distance
+      }
+    }
+  }, [minZoom, maxZoom])
 
   const handleTouchEnd = useCallback((e: React.TouchEvent) => {
-    if (e.touches.length < 2 && canvasRef.current) {
-      canvasRef.current.dataset.initialDistance = ""
-      canvasRef.current.dataset.initialZoom = ""
+    if (e.touches.length < 2) {
+      touchState.current = { initialDistance: 0, initialZoom: 0, lastDistance: 0 }
     }
   }, [])
 
   // Handle pan operations
   const handlePanStart = useCallback((e: React.MouseEvent) => {
-    // Start panning if not dragging an element
-    if (!draggedElement && e.button === 0) {
+    // Only start panning if clicking on empty canvas area (not on an element)
+    const target = e.target as HTMLElement
+    const isCanvasClick = target === canvasRef.current || target.closest('[data-canvas-bg]')
+    
+    if (isCanvasClick && !draggedElement && e.button === 0) {
       setIsPanning(true)
       setLastPanPoint({ x: e.clientX, y: e.clientY })
       e.preventDefault()
@@ -119,38 +153,101 @@ export function ZineCanvas({
     setIsPanning(false)
   }, [])
 
-  // Handle mouse move for dragging and panning
+  // Handle mouse move for dragging, resizing and panning
   const handleMouseMove = (e: React.MouseEvent) => {
-    // Handle panning first
-    handlePanMove(e)
-    
-    // Then handle element dragging
-    if (draggedElement && canvasRef.current) {
+    // Handle element resizing first (highest priority)
+    if (resizingElement && canvasRef.current) {
+      const element = currentPage.elements.find(el => el.id === resizingElement)
+      if (element) {
+        const deltaX = (e.clientX - initialResize.mouseX) / zoom
+        const deltaY = (e.clientY - initialResize.mouseY) / zoom
+        
+        let newWidth = initialResize.width
+        let newHeight = initialResize.height
+        let newX = initialResize.x
+        let newY = initialResize.y
+        
+        // Calculate new dimensions based on resize handle
+        if (resizeHandle?.includes('right')) {
+          newWidth = Math.max(50, initialResize.width + deltaX)
+        }
+        if (resizeHandle?.includes('left')) {
+          newWidth = Math.max(50, initialResize.width - deltaX)
+          newX = initialResize.x + deltaX
+          if (newWidth <= 50) newX = initialResize.x + initialResize.width - 50
+        }
+        if (resizeHandle?.includes('bottom')) {
+          newHeight = Math.max(50, initialResize.height + deltaY)
+        }
+        if (resizeHandle?.includes('top')) {
+          newHeight = Math.max(50, initialResize.height - deltaY)
+          newY = initialResize.y + deltaY
+          if (newHeight <= 50) newY = initialResize.y + initialResize.height - 50
+        }
+        
+        // Maintain aspect ratio for images when using corner handles
+        if (element.type === 'image' && resizeHandle && 
+            (resizeHandle.includes('top') || resizeHandle.includes('bottom')) &&
+            (resizeHandle.includes('left') || resizeHandle.includes('right'))) {
+          const aspectRatio = initialResize.width / initialResize.height
+          if (Math.abs(deltaX) > Math.abs(deltaY)) {
+            newHeight = newWidth / aspectRatio
+          } else {
+            newWidth = newHeight * aspectRatio
+          }
+        }
+        
+        updateElement(resizingElement, { 
+          width: newWidth, 
+          height: newHeight, 
+          x: newX, 
+          y: newY 
+        })
+      }
+      e.preventDefault()
+      e.stopPropagation()
+    } else if (draggedElement && canvasRef.current) {
+      // Handle element dragging
       const canvasRect = canvasRef.current.getBoundingClientRect()
-      const newX = e.clientX - canvasRect.left - dragOffset.x
-      const newY = e.clientY - canvasRect.top - dragOffset.y
+      // Account for zoom when calculating position
+      const scaledX = (e.clientX - canvasRect.left) / zoom - dragOffset.x
+      const scaledY = (e.clientY - canvasRect.top) / zoom - dragOffset.y
       
       // Constrain to canvas bounds
       const element = currentPage.elements.find(el => el.id === draggedElement)
       if (element) {
-        const constrainedX = Math.max(0, Math.min(newX, canvasRect.width - element.width))
-        const constrainedY = Math.max(0, Math.min(newY, canvasRect.height - element.height))
+        const maxX = (canvasRect.width / zoom) - element.width
+        const maxY = (canvasRect.height / zoom) - element.height
+        const constrainedX = Math.max(0, Math.min(scaledX, maxX))
+        const constrainedY = Math.max(0, Math.min(scaledY, maxY))
         
         updateElement(draggedElement, { x: constrainedX, y: constrainedY })
       }
+      e.preventDefault()
+      e.stopPropagation()
+    } else if (isPanning) {
+      // Only handle panning if not dragging an element
+      handlePanMove(e)
     }
   }
 
   // Handle click to open add menu when not on element
   const handleCanvasClick = (e: React.MouseEvent) => {
     if (!canvasRef.current) return
-    // If we were dragging, do not open menu
-    if (draggedElement) return
-    const rect = canvasRef.current.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
-    setMenuPos({ x, y })
-    setMenuOpen(true)
+    
+    // Check if clicking on canvas background (not on an element)
+    const target = e.target as HTMLElement
+    const isElementClick = target.closest('[data-element]')
+    
+    // Only open menu if clicking on empty space
+    if (!isElementClick && !draggedElement && !isPanning) {
+      const rect = canvasRef.current.getBoundingClientRect()
+      // Account for zoom when calculating menu position
+      const x = (e.clientX - rect.left) / zoom
+      const y = (e.clientY - rect.top) / zoom
+      setMenuPos({ x, y })
+      setMenuOpen(true)
+    }
   }
 
   const placeTextHere = () => {
@@ -168,7 +265,7 @@ export function ZineCanvas({
   }
 
   return (
-    <div className="relative">
+    <div className="relative w-full h-full">
       {/* Zoom indicator */}
       <div className="absolute top-4 right-4 z-10 bg-black/20 backdrop-blur-sm rounded-lg px-3 py-1 text-white text-sm font-medium">
         {Math.round(zoom * 100)}%
@@ -176,8 +273,7 @@ export function ZineCanvas({
       
       {/* ZINE Creation Workspace */}
       <motion.div
-        className="relative"
-        style={{ width: 900, height: 700 }}
+        className="relative w-full h-full"
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.3 }}
@@ -228,22 +324,32 @@ export function ZineCanvas({
               width: 1400,
               height: 900,
               filter: "drop-shadow(0 25px 50px rgba(0,0,0,0.4))",
-              transform: `scale(${zoom}) translate(${panOffset.x}px, ${panOffset.y}px)`,
               transformOrigin: "center center",
-              transition: isPanning ? "none" : "transform 0.1s ease-out",
               cursor: !draggedElement ? (isPanning ? "grabbing" : "grab") : "default"
             }}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2, duration: 0.6 }}
+            animate={{ 
+              opacity: 1, 
+              y: panOffset.y,
+              scale: zoom,
+              x: panOffset.x
+            }}
+            initial={{ opacity: 0, y: 20, scale: zoom }}
+            transition={{ 
+              opacity: { delay: 0.2, duration: 0.6 },
+              scale: { duration: isPanning ? 0 : 0.1 },
+              x: { duration: isPanning ? 0 : 0.1 },
+              y: { duration: isPanning ? 0 : 0.1 }
+            }}
             onMouseDown={handlePanStart}
             onMouseMove={handleMouseMove}
             onMouseUp={() => {
               setDraggedElement(null)
+              setResizingElement(null)
               handlePanEnd()
             }}
             onMouseLeave={() => {
               setDraggedElement(null)
+              setResizingElement(null)
               handlePanEnd()
             }}
             onWheel={handleWheel}
@@ -282,12 +388,14 @@ export function ZineCanvas({
             <div 
               ref={canvasRef}
               className="absolute inset-0 p-8"
+              data-canvas-bg
               onClick={handleCanvasClick}
             >
               {/* Render page elements */}
               {currentPage.elements.map((element) => (
                 <div
                   key={element.id}
+                  data-element
                   className={`absolute cursor-move border-2 ${
                     selectedElement === element.id ? "border-purple-500 shadow-lg" : "border-transparent"
                   } hover:border-purple-300 ${draggedElement === element.id ? "transition-none" : "transition-colors duration-150"}`}
@@ -298,7 +406,10 @@ export function ZineCanvas({
                     height: element.height,
                     zIndex: draggedElement === element.id ? 1000 : 1,
                   }}
-                  onClick={() => setSelectedElement(element.id)}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setSelectedElement(element.id)
+                  }}
                   onDoubleClick={() => {
                     if (element.type === "text") {
                       const newContent = prompt("テキストを編集:", element.content || "")
@@ -309,12 +420,14 @@ export function ZineCanvas({
                   }}
                   onMouseDown={(e) => {
                     e.preventDefault()
+                    e.stopPropagation()
                     setDraggedElement(element.id)
                     setSelectedElement(element.id)
+                    // Calculate offset within the element accounting for zoom
                     const rect = e.currentTarget.getBoundingClientRect()
                     setDragOffset({
-                      x: e.clientX - rect.left,
-                      y: e.clientY - rect.top,
+                      x: (e.clientX - rect.left) / zoom,
+                      y: (e.clientY - rect.top) / zoom,
                     })
                   }}
                   onMouseUp={() => {
@@ -334,12 +447,157 @@ export function ZineCanvas({
                     </div>
                   )}
                   {element.type === "image" && (
-                    <img
-                      src={element.src}
-                      alt="ZINE element"
-                      className="w-full h-full object-cover rounded-lg shadow-md"
-                      draggable={false}
-                    />
+                    <>
+                      <img
+                        src={element.src}
+                        alt="ZINE element"
+                        className="w-full h-full object-cover rounded-lg shadow-md"
+                        draggable={false}
+                      />
+                      {/* Resize handles for selected images */}
+                      {selectedElement === element.id && (
+                        <>
+                          {/* Corner handles */}
+                          <div
+                            className="absolute -top-1 -left-1 w-3 h-3 bg-purple-500 rounded-full cursor-nw-resize"
+                            onMouseDown={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              setResizingElement(element.id)
+                              setResizeHandle('top-left')
+                              setInitialResize({
+                                width: element.width,
+                                height: element.height,
+                                x: element.x,
+                                y: element.y,
+                                mouseX: e.clientX,
+                                mouseY: e.clientY
+                              })
+                            }}
+                          />
+                          <div
+                            className="absolute -top-1 -right-1 w-3 h-3 bg-purple-500 rounded-full cursor-ne-resize"
+                            onMouseDown={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              setResizingElement(element.id)
+                              setResizeHandle('top-right')
+                              setInitialResize({
+                                width: element.width,
+                                height: element.height,
+                                x: element.x,
+                                y: element.y,
+                                mouseX: e.clientX,
+                                mouseY: e.clientY
+                              })
+                            }}
+                          />
+                          <div
+                            className="absolute -bottom-1 -left-1 w-3 h-3 bg-purple-500 rounded-full cursor-sw-resize"
+                            onMouseDown={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              setResizingElement(element.id)
+                              setResizeHandle('bottom-left')
+                              setInitialResize({
+                                width: element.width,
+                                height: element.height,
+                                x: element.x,
+                                y: element.y,
+                                mouseX: e.clientX,
+                                mouseY: e.clientY
+                              })
+                            }}
+                          />
+                          <div
+                            className="absolute -bottom-1 -right-1 w-3 h-3 bg-purple-500 rounded-full cursor-se-resize"
+                            onMouseDown={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              setResizingElement(element.id)
+                              setResizeHandle('bottom-right')
+                              setInitialResize({
+                                width: element.width,
+                                height: element.height,
+                                x: element.x,
+                                y: element.y,
+                                mouseX: e.clientX,
+                                mouseY: e.clientY
+                              })
+                            }}
+                          />
+                          {/* Edge handles */}
+                          <div
+                            className="absolute -top-1 left-1/2 -translate-x-1/2 w-3 h-3 bg-purple-500 rounded-full cursor-n-resize"
+                            onMouseDown={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              setResizingElement(element.id)
+                              setResizeHandle('top')
+                              setInitialResize({
+                                width: element.width,
+                                height: element.height,
+                                x: element.x,
+                                y: element.y,
+                                mouseX: e.clientX,
+                                mouseY: e.clientY
+                              })
+                            }}
+                          />
+                          <div
+                            className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-3 h-3 bg-purple-500 rounded-full cursor-s-resize"
+                            onMouseDown={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              setResizingElement(element.id)
+                              setResizeHandle('bottom')
+                              setInitialResize({
+                                width: element.width,
+                                height: element.height,
+                                x: element.x,
+                                y: element.y,
+                                mouseX: e.clientX,
+                                mouseY: e.clientY
+                              })
+                            }}
+                          />
+                          <div
+                            className="absolute top-1/2 -left-1 -translate-y-1/2 w-3 h-3 bg-purple-500 rounded-full cursor-w-resize"
+                            onMouseDown={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              setResizingElement(element.id)
+                              setResizeHandle('left')
+                              setInitialResize({
+                                width: element.width,
+                                height: element.height,
+                                x: element.x,
+                                y: element.y,
+                                mouseX: e.clientX,
+                                mouseY: e.clientY
+                              })
+                            }}
+                          />
+                          <div
+                            className="absolute top-1/2 -right-1 -translate-y-1/2 w-3 h-3 bg-purple-500 rounded-full cursor-e-resize"
+                            onMouseDown={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              setResizingElement(element.id)
+                              setResizeHandle('right')
+                              setInitialResize({
+                                width: element.width,
+                                height: element.height,
+                                x: element.x,
+                                y: element.y,
+                                mouseX: e.clientX,
+                                mouseY: e.clientY
+                              })
+                            }}
+                          />
+                        </>
+                      )}
+                    </>
                   )}
                   {element.type === "shape" && (
                     <div

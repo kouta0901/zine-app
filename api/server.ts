@@ -360,28 +360,53 @@ app.post("/embed", async (req, res) => {
 // 3. 表紙画像生成エンドポイント
 app.post("/cover", async (req, res) => {
   try {
-    const { synopsis } = req.body;
+    const { synopsis, title } = req.body;
     
     if (!synopsis) {
       return res.status(400).json({ error: "synopsis is required" });
     }
 
+    const bookTitle = title || "小説タイトル"; // デフォルトタイトル設定
+
     console.log("Cover generation requested for synopsis:", synopsis.substring(0, 200) + "...");
     
-    // Create a detailed prompt for book cover generation
-    const coverPrompt = `Generate a beautiful book cover image for this Japanese novel. Create an artistic and professional book cover design based on the following synopsis:
+    // Create a detailed prompt for book cover generation with Japanese text support
+    const coverPrompt = `日本語小説「${bookTitle}」の美しい表紙画像を生成してください。以下のあらすじに基づいて、プロフェッショナルで芸術的な書籍表紙デザインを作成してください：
 
+【小説タイトル】${bookTitle}
+
+【あらすじ】
 ${synopsis}
 
-Requirements:
-- Professional book cover design with vertical orientation (taller than wide)
-- Express the atmosphere and theme of the novel
-- Beautiful background and visual elements in anime/manga illustration style
-- High quality artwork suitable for printing
-- Include dramatic lighting and atmospheric effects
-- Use colors that match the mood of the story
+## 必須要件：
+- プロフェッショナルな書籍表紙デザイン（縦向き、横より縦が長い）
+- 小説の雰囲気とテーマを表現
+- アニメ・マンガ風イラストスタイルの美しい背景とビジュアル要素
+- 印刷に適した高品質なアートワーク
+- ドラマチックな照明と雰囲気効果を含む
+- 物語の雰囲気に合った色彩使用
 
-Create artwork suitable for a Japanese novel cover.`;
+## 文字・テキスト要件：
+- タイトル「${bookTitle}」を表紙上部に日本語で明確に表示
+- 日本語文字は正確で読みやすく、文字化けを避ける
+- 文字は鮮明で読みやすく、背景と調和する配置
+- タイトル文字には適切なコントラストと視認性を確保
+- フォント：明朝体、ゴシック体、または美しい書体を使用
+- 文字色は背景に対して十分なコントラストを持つ
+
+## デザイン指針：
+- 日本の小説表紙として適切なレイアウト
+- 表紙として魅力的で手に取りたくなるデザイン
+- 物語の世界観を一目で伝える構成
+- プロの出版社レベルの仕上がり
+- タイトルが主要な視覚要素として目立つ配置
+
+## 技術的要求：
+- 高解像度（最低300dpi相当）
+- 縦横比：3:4または2:3（書籍表紙に適した比率）
+- 色彩豊富で印刷に適したカラープロファイル
+
+Please create a professional Japanese novel cover with the title "${bookTitle}" clearly displayed in readable Japanese characters, avoiding any text corruption or garbled characters.`;
 
     try {
       // Try direct HTTP API call to Vertex AI first (working method)
