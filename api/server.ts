@@ -430,7 +430,7 @@ Please create a professional Japanese novel cover with the title "${bookTitle}" 
           contents: [{
             role: "user",
             parts: [{
-              text: coverPrompt
+              text: `Generate a professional book cover image. ${coverPrompt}`
             }]
           }],
           generation_config: {
@@ -460,21 +460,69 @@ Please create a professional Japanese novel cover with the title "${bookTitle}" 
         const apiResult: any = await response.json();
         console.log("Direct HTTP API response received");
         
+        // 🔍 詳細なレスポンス構造をログ出力
+        console.log("=== API Response Analysis ===");
+        console.log("Full API Result:", JSON.stringify(apiResult, null, 2));
+        console.log("Response keys:", Object.keys(apiResult || {}));
+        
+        if (apiResult.candidates) {
+          console.log("Candidates length:", apiResult.candidates.length);
+          apiResult.candidates.forEach((candidate: any, index: number) => {
+            console.log(`Candidate ${index}:`, JSON.stringify(candidate, null, 2));
+          });
+        } else {
+          console.log("❌ No candidates found in response");
+        }
+        
+        if (apiResult.promptFeedback) {
+          console.log("Prompt Feedback:", JSON.stringify(apiResult.promptFeedback, null, 2));
+        }
+        
         // Extract image data from response
         let imageData = null;
         
         if (apiResult.candidates && apiResult.candidates[0]) {
           const candidate = apiResult.candidates[0];
+          console.log("🔎 Analyzing candidate structure...");
+          console.log("Candidate keys:", Object.keys(candidate || {}));
+          
           if (candidate.content && candidate.content.parts) {
-            for (const part of candidate.content.parts) {
+            console.log("Parts found:", candidate.content.parts.length);
+            for (let i = 0; i < candidate.content.parts.length; i++) {
+              const part = candidate.content.parts[i];
+              console.log(`Part ${i}:`, JSON.stringify(part, null, 2));
+              
               if (part.inlineData && part.inlineData.data) {
                 imageData = part.inlineData.data;
-                console.log("Image data found in direct HTTP API response");
+                console.log("✅ Image data found in direct HTTP API response");
+                console.log("Image data length:", imageData.length);
+                break;
+              } else if (part.inline_data && part.inline_data.data) {
+                // 代替パス確認
+                imageData = part.inline_data.data;
+                console.log("✅ Image data found in alternative path (inline_data)");
+                console.log("Image data length:", imageData.length);
                 break;
               }
             }
+          } else {
+            console.log("❌ No content.parts found in candidate");
+            console.log("Candidate content:", JSON.stringify(candidate.content, null, 2));
+          }
+        } else {
+          console.log("❌ No valid candidate found");
+        }
+        
+        if (!imageData) {
+          console.log("❌ Image data not found - checking safety ratings");
+          if (apiResult.candidates && apiResult.candidates[0] && apiResult.candidates[0].safetyRatings) {
+            console.log("Safety ratings:", JSON.stringify(apiResult.candidates[0].safetyRatings, null, 2));
+          }
+          if (apiResult.candidates && apiResult.candidates[0] && apiResult.candidates[0].finishReason) {
+            console.log("Finish reason:", apiResult.candidates[0].finishReason);
           }
         }
+        console.log("=== End API Response Analysis ===");
         
         if (imageData) {
           // Save image to Google Cloud Storage
@@ -506,10 +554,16 @@ Please create a professional Japanese novel cover with the title "${bookTitle}" 
             message: "表紙画像が正常に生成されました（Direct HTTP API使用）",
             success: true
           });
+        } else {
+          // 画像データが見つからない場合の詳細なエラーレスポンス
+          console.error("❌ No image data found in Vertex AI response");
+          console.log("Throwing error to trigger fallback...");
+          throw new Error("No image data found in Vertex AI response");
         }
         
       } catch (directApiError) {
         console.error("Direct HTTP API call failed:", directApiError);
+        console.log("Will try fallback methods...");
       }
 
       // Try Google Generative AI (fallback with API key)
@@ -575,35 +629,50 @@ Please create a professional Japanese novel cover with the title "${bookTitle}" 
       }
       
     } catch (modelError) {
-      console.error("Image generation error:", modelError);
+      console.error("🚨 All image generation methods failed:", modelError);
       
       // Fallback to text description with Gemini Pro
-      console.log("Falling back to Gemini Pro for text description");
-      const textModel = vertexAI.getGenerativeModel({ model: "gemini-1.5-pro" });
-      
-      const textResult = await textModel.generateContent({
-        contents: [{
-          role: "user",
-          parts: [{
-            text: `次の小説の表紙デザインの詳細な説明を作成してください：\n\n${synopsis}`
+      console.log("🔄 Falling back to Gemini Pro for text description");
+      try {
+        const textModel = vertexAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+        
+        const textResult = await textModel.generateContent({
+          contents: [{
+            role: "user",
+            parts: [{
+              text: `次の小説の表紙デザインの詳細な説明を作成してください：\n\n${synopsis}`
+            }]
           }]
-        }]
-      });
-      
-      const textResponse = textResult.response.candidates?.[0]?.content.parts[0]?.text || "";
-      
-      res.json({
-        success: false,
-        url: "https://via.placeholder.com/400x600/4a3c28/daa520?text=表紙画像",
-        description: textResponse,
-        message: "画像生成は現在利用できません。表紙の説明を生成しました。"
-      });
+        });
+        
+        const textResponse = textResult.response.candidates?.[0]?.content.parts[0]?.text || "";
+        
+        console.log("📝 Text description generated as fallback");
+        
+        res.json({
+          success: false,
+          url: "https://via.placeholder.com/400x600/4a3c28/daa520?text=Cover+Image",
+          description: textResponse,
+          message: "画像生成に失敗しました。表紙デザインの説明を代わりに提供します。しばらくしてから再試行してください。"
+        });
+      } catch (fallbackError) {
+        console.error("🚨 Text fallback also failed:", fallbackError);
+        
+        res.json({
+          success: false,
+          url: "https://via.placeholder.com/400x600/4a3c28/daa520?text=Cover+Image",
+          description: "",
+          message: "申し訳ございません。現在画像生成サービスが利用できません。しばらくしてから再試行してください。"
+        });
+      }
     }
 
   } catch (error) {
-    console.error("Cover generation error:", error);
+    console.error("🚨 Unexpected cover generation error:", error);
     res.status(500).json({ 
+      success: false,
       error: "Failed to generate cover image",
+      message: "予期しないエラーが発生しました。システム管理者に連絡してください。",
       details: error instanceof Error ? error.message : 'Unknown error'
     });
   }
@@ -699,7 +768,13 @@ app.get("/zines", async (req, res) => {
             createdAt: zineData.createdAt,
             updatedAt: zineData.updatedAt,
             description: zineData.description,
-            thumbnail: zineData.thumbnail
+            thumbnail: zineData.thumbnail,
+            coverImageUrl: zineData.coverImageUrl,
+            category: zineData.category,
+            author: zineData.author,
+            publishedDate: zineData.publishedDate,
+            novelPages: zineData.novelPages,
+            pages: zineData.pages
           });
         } catch (parseError) {
           console.error(`Error parsing ZINE file ${file.name}:`, parseError);

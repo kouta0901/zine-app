@@ -9,6 +9,7 @@ interface CoverGenerationModalProps {
   isGenerating: boolean
   coverImageUrl: string | null
   onGenerate: () => void
+  onComplete?: () => void
   novelTitle?: string
 }
 
@@ -18,15 +19,23 @@ export function CoverGenerationModal({
   isGenerating, 
   coverImageUrl, 
   onGenerate,
+  onComplete,
   novelTitle = "あなたの小説"
 }: CoverGenerationModalProps) {
   const [showProgress, setShowProgress] = useState(false)
   const [progress, setProgress] = useState(0)
+  const [imageLoadError, setImageLoadError] = useState<string | null>(null)
+  const [imageLoadSuccess, setImageLoadSuccess] = useState(false)
 
   useEffect(() => {
+    console.log("CoverGenerationModal - coverImageUrl変更:", coverImageUrl)
+    console.log("CoverGenerationModal - isGenerating:", isGenerating)
+    
     if (isGenerating) {
       setShowProgress(true)
       setProgress(0)
+      setImageLoadError(null)
+      setImageLoadSuccess(false)
       
       // プログレスバーのアニメーション
       const interval = setInterval(() => {
@@ -38,6 +47,7 @@ export function CoverGenerationModal({
 
       return () => clearInterval(interval)
     } else if (coverImageUrl) {
+      console.log("表示ステップに移行中...")
       setProgress(100)
       setTimeout(() => setShowProgress(false), 1000)
     }
@@ -204,17 +214,44 @@ export function CoverGenerationModal({
                   className="relative"
                 >
                   <div className="relative p-4 rounded-2xl" style={{ background: "rgba(218, 165, 32, 0.1)" }}>
-                    <img 
-                      src={coverImageUrl} 
-                      alt="Generated Book Cover"
-                      className="rounded-xl shadow-2xl"
-                      style={{
-                        width: "300px",
-                        height: "420px",
-                        objectFit: "cover",
-                        border: "3px solid rgba(218, 165, 32, 0.4)"
-                      }}
-                    />
+                    {imageLoadError ? (
+                      <div 
+                        className="rounded-xl shadow-2xl flex flex-col items-center justify-center text-center p-4"
+                        style={{
+                          width: "300px",
+                          height: "420px",
+                          border: "3px solid rgba(218, 165, 32, 0.4)",
+                          background: "rgba(255, 0, 0, 0.1)"
+                        }}
+                      >
+                        <div className="text-red-600 mb-2">⚠️ 画像読み込みエラー</div>
+                        <div className="text-sm text-gray-600">{imageLoadError}</div>
+                        <div className="text-xs text-gray-500 mt-2 break-all">URL: {coverImageUrl}</div>
+                      </div>
+                    ) : (
+                      <img 
+                        src={coverImageUrl} 
+                        alt="Generated Book Cover"
+                        className="rounded-xl shadow-2xl"
+                        style={{
+                          width: "300px",
+                          height: "420px",
+                          objectFit: "cover",
+                          border: "3px solid rgba(218, 165, 32, 0.4)"
+                        }}
+                        onLoad={() => {
+                          console.log("画像読み込み成功:", coverImageUrl)
+                          setImageLoadSuccess(true)
+                          setImageLoadError(null)
+                        }}
+                        onError={(e) => {
+                          console.error("画像読み込み失敗:", coverImageUrl)
+                          console.error("エラー詳細:", e)
+                          setImageLoadError(`画像の読み込みに失敗しました`)
+                          setImageLoadSuccess(false)
+                        }}
+                      />
+                    )}
                     <div className="absolute -top-2 -right-2">
                       <motion.div
                         animate={{ scale: [1, 1.2, 1] }}
@@ -269,19 +306,35 @@ export function CoverGenerationModal({
             disabled={isGenerating}
             className="border-amber-600 text-amber-600 hover:bg-amber-50"
           >
-            {coverImageUrl ? "完了" : "キャンセル"}
+            キャンセル
           </Button>
           {coverImageUrl && !isGenerating && (
-            <Button
-              onClick={onGenerate}
-              className="text-white font-medium"
-              style={{
-                background: "linear-gradient(135deg, #8b6914 0%, #a0751f 50%, #b8860b 100%)"
-              }}
-            >
-              <Sparkles className="w-4 h-4 mr-2" />
-              再生成
-            </Button>
+            <>
+              <Button
+                onClick={onGenerate}
+                className="text-white font-medium"
+                style={{
+                  background: "linear-gradient(135deg, #8b6914 0%, #a0751f 50%, #b8860b 100%)"
+                }}
+              >
+                <Sparkles className="w-4 h-4 mr-2" />
+                再生成
+              </Button>
+              {onComplete && (
+                <Button
+                  onClick={() => {
+                    onComplete()
+                    onClose()
+                  }}
+                  className="text-white font-bold"
+                  style={{
+                    background: "linear-gradient(135deg, #22c55e 0%, #16a34a 50%, #15803d 100%)"
+                  }}
+                >
+                  🎉 完成
+                </Button>
+              )}
+            </>
           )}
         </div>
       </motion.div>

@@ -1,7 +1,7 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import {
   ArrowLeft,
   ImageIcon,
@@ -33,7 +33,7 @@ import { ZineMenuPanel } from "./ZineMenuPanel"
 import { CoverGenerationModal } from "./CoverGenerationModal"
 import { ZineCreatorProps, Element, Page, ChatMessage, TextSelection, ReviewSuggestion, CreatorMode, MenuSection } from "@/types/zine"
 
-export function ZineCreator({ onBack }: ZineCreatorProps) {
+export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: ZineCreatorProps) {
   const [mode, setMode] = useState<"zine" | "novel">("zine")
   const [zineTitle, setZineTitle] = useState("")
   const [currentPageIndex, setCurrentPageIndex] = useState(0)
@@ -1340,6 +1340,57 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
     scenario: ""
   })
 
+  // Initialize component state when initialData is provided
+  useEffect(() => {
+    if (initialData) {
+      console.log('Initializing ZineCreator with data:', initialData)
+      
+      // Set basic ZINE information
+      if (initialData.title) {
+        setZineTitle(initialData.title)
+      }
+      
+      // Set pages data
+      if (initialData.pages && initialData.pages.length > 0) {
+        setPages(initialData.pages)
+      }
+      
+      // Set concept configuration
+      if (initialData.conceptConfig) {
+        setConceptConfig(initialData.conceptConfig)
+      }
+      
+      // Set worldview configuration
+      if (initialData.worldviewConfig) {
+        setWorldviewConfig(initialData.worldviewConfig)
+      }
+      
+      // Set novel content and automatically switch to novel mode if content exists
+      if (initialData.novelContent) {
+        setNovelContent(initialData.novelContent)
+        // 🔄 小説コンテンツがある場合は自動的に小説モードに切り替え
+        setMode("novel")
+        console.log('Switching to novel mode due to existing novel content')
+      } else if (initialData.currentMode) {
+        // 🔄 保存されたモードがある場合はそれを復元
+        setMode(initialData.currentMode)
+        console.log(`Restoring saved mode: ${initialData.currentMode}`)
+      }
+      
+      // Set novel pages
+      if (initialData.novelPages && initialData.novelPages.length > 0) {
+        setNovelPages(initialData.novelPages)
+      }
+      
+      // Set cover image
+      if (initialData.coverImageUrl) {
+        setCoverImageUrl(initialData.coverImageUrl)
+      }
+      
+      console.log('ZineCreator initialization completed')
+    }
+  }, [initialData])
+
   const hasZineContent = pages.some((page) => page.elements.length > 0) || zineTitle.trim() !== ""
 
   // 小説化機能
@@ -1383,6 +1434,8 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
         worldviewConfig: worldviewConfig,
         novelContent: novelContent,
         novelPages: novelPages,
+        coverImageUrl: coverImageUrl,
+        currentMode: mode, // 🔄 現在のモードも保存
         createdAt: new Date().toISOString()
       }
 
@@ -1404,13 +1457,24 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
 
     setIsGeneratingCover(true)
     try {
+      console.log("表紙生成開始 - 小説内容:", novelContent.substring(0, 100) + "...")
+      
       const result = await generateCover({
         synopsis: novelContent
       })
       
+      console.log("API レスポンス詳細:", result)
+      console.log("画像URL:", result.url)
+      console.log("URL型:", typeof result.url)
+      console.log("URL長さ:", result.url ? result.url.length : 0)
+      
       if (result.url) {
-        setCoverImageUrl(result.url)
+        const cleanUrl = result.url.trim()
+        console.log("クリーンアップ後URL:", cleanUrl)
+        setCoverImageUrl(cleanUrl)
+        console.log("coverImageUrl状態更新完了:", cleanUrl)
       } else {
+        console.error("画像URLが空:", result)
         alert(result.message || "表紙画像の生成に失敗しました。")
       }
     } catch (error) {
@@ -1427,6 +1491,47 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
       return
     }
     setShowCoverModal(true)
+  }
+
+  const handleCompleteBook = async () => {
+    if (!novelContent.trim() || !coverImageUrl) {
+      alert("小説の内容と表紙画像が必要です。")
+      return
+    }
+
+    try {
+      // My Booksデータの構造に合わせて保存
+      const bookData = {
+        title: zineTitle || "無題の小説",
+        status: "published", // My Booksでは公開済みとして扱う
+        description: `${novelPages.length}ページの小説`,
+        pages: pages,
+        conceptConfig: conceptConfig,
+        worldviewConfig: worldviewConfig,
+        novelContent: novelContent,
+        novelPages: novelPages,
+        coverImageUrl: coverImageUrl,
+        currentMode: mode,
+        createdAt: new Date().toISOString(),
+        category: "Fiction", // My Books用のカテゴリ
+        author: "You", // 固定値
+        publishedDate: new Date().toISOString()
+      }
+
+      const result = await saveZine(bookData)
+      alert(`🎉 作品が My Books に登録されました！\n「${bookData.title}」として公開されています。`)
+      
+      // Refresh published books list
+      if (onPublishedBooksUpdate) {
+        await onPublishedBooksUpdate()
+      }
+      
+      // 成功したらホームに戻る
+      onBack()
+    } catch (error) {
+      console.error("My Books登録エラー:", error)
+      alert("My Booksへの登録に失敗しました。もう一度お試しください。")
+    }
   }
 
   return (
@@ -2213,6 +2318,7 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
         isGenerating={isGeneratingCover}
         coverImageUrl={coverImageUrl}
         onGenerate={handleCoverGeneration}
+        onComplete={handleCompleteBook}
         novelTitle={zineTitle || "あなたの小説"}
       />
     </div>

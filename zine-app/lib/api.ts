@@ -1,8 +1,6 @@
 // 一時的にハードコード（後で環境変数に戻す）
 // 注: 実際のデプロイされたAPI URLを使用
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || (process.env.NODE_ENV === 'development' 
-  ? 'http://localhost:8083' 
-  : 'https://zine-api-830716651527.asia-northeast1.run.app');
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'https://zine-api-830716651527.us-central1.run.app';
 
 // API呼び出し用のヘルパー関数
 async function apiCall(endpoint: string, payload: any) {
@@ -193,4 +191,33 @@ export async function getNovels(): Promise<{ novels: any[] }> {
   // TODO: Implement novel API endpoint
   // For now, return empty array since we don't have novel API
   return { novels: [] };
+}
+
+// Works in Progress用：完全なZINEデータを取得
+export async function getZineWithDetails(id: string): Promise<any | null> {
+  try {
+    // First try Cloud Storage API
+    const result = await getZine(id);
+    if (result) {
+      return result;
+    }
+  } catch (error) {
+    console.warn('Failed to get ZINE from Cloud Storage:', error);
+  }
+
+  // Fallback to localStorage
+  if (typeof window !== 'undefined') {
+    try {
+      const localData = localStorage.getItem(`zine_${id}`);
+      if (localData) {
+        const zineData = JSON.parse(localData);
+        console.log('Retrieved ZINE from localStorage:', zineData);
+        return zineData;
+      }
+    } catch (error) {
+      console.error('Error retrieving ZINE from localStorage:', error);
+    }
+  }
+
+  return null;
 }

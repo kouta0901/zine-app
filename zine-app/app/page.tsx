@@ -8,7 +8,10 @@ import { Input } from "@/components/ui/input"
 import { ZineGallery } from "@/components/zine-gallery"
 import { ZineViewer } from "@/components/zine-viewer"
 import { ZineCreator } from "@/components/zine-creator"
+import { NovelViewer } from "@/components/novel-viewer"
 import { CustomCursor } from "@/components/custom-cursor"
+import { getZineWithDetails, getZines } from "@/lib/api"
+import { SavedZineData } from "@/types/zine"
 
 const mockZines = [
   {
@@ -73,24 +76,88 @@ const mockZines = [
   },
 ]
 
-type ViewMode = "gallery" | "viewer" | "creator"
+type ViewMode = "gallery" | "viewer" | "creator" | "novel-viewer"
 
 export default function ZineApp() {
   const [viewMode, setViewMode] = useState<ViewMode>("gallery")
   const [selectedZine, setSelectedZine] = useState<(typeof mockZines)[0] | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedGenre, setSelectedGenre] = useState("All")
+  const [selectedWorkData, setSelectedWorkData] = useState<SavedZineData | null>(null)
+  const [publishedBooks, setPublishedBooks] = useState<any[]>([])
+  const [publishedBooksData, setPublishedBooksData] = useState<Map<string, any>>(new Map())
+  const [selectedNovel, setSelectedNovel] = useState<any | null>(null)
+  const [loading, setLoading] = useState(true)
 
-  const handleWorkSelect = (work: any) => {
+  // Load published books from API
+  useEffect(() => {
+    const loadPublishedBooks = async () => {
+      try {
+        setLoading(true)
+        const response = await getZines()
+        
+        // Filter published books (status: "published") and convert to My Books format
+        const publishedDataMap = new Map()
+        const published = response.zines
+          .filter((zine: any) => zine.status === "published")
+          .map((zine: any) => {
+            // Store full data for viewer
+            publishedDataMap.set(zine.id, zine)
+            
+            return {
+              id: zine.id,
+              title: zine.title,
+              author: zine.author || "You",
+              cover: zine.coverImageUrl || zine.thumbnail || "/placeholder.svg?height=400&width=300",
+              pages: zine.novelPages?.length || zine.pages?.length || 1,
+              genre: zine.category || "Fiction",
+              createdAt: zine.publishedDate || zine.createdAt,
+              isOwned: true,
+              isPublished: true
+            }
+          })
+        
+        setPublishedBooksData(publishedDataMap)
+        setPublishedBooks(published)
+        console.log("Loaded published books:", published)
+      } catch (error) {
+        console.error("Failed to load published books:", error)
+        setPublishedBooks([])
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadPublishedBooks()
+  }, [])
+
+  const handleWorkSelect = async (work: any) => {
     // Navigate to appropriate creator based on work type
     if (work.type === 'zine') {
-      // TODO: Load ZINE data and navigate to ZINE creator
-      console.log('Opening ZINE:', work)
-      setViewMode("creator")
+      try {
+        console.log('Loading ZINE data for:', work)
+        const zineData = await getZineWithDetails(work.id)
+        
+        if (zineData) {
+          console.log('Successfully loaded ZINE data:', zineData)
+          setSelectedWorkData(zineData)
+        } else {
+          console.warn('No data found for ZINE:', work.id)
+          setSelectedWorkData(null)
+        }
+        
+        setViewMode("creator")
+      } catch (error) {
+        console.error('Failed to load ZINE data:', error)
+        // Still navigate to creator but without data
+        setSelectedWorkData(null)
+        setViewMode("creator")
+      }
     } else if (work.type === 'novel') {
       // TODO: Load novel data and navigate to novel creator
       console.log('Opening Novel:', work)
       // For now, we'll use the same creator - in the future this should be a different component
+      setSelectedWorkData(null)
       setViewMode("creator")
     }
   }
@@ -112,7 +179,13 @@ export default function ZineApp() {
     return () => window.removeEventListener("mousemove", handleMouseMove)
   }, [mouseX, mouseY, enableMouseMotion])
 
-  const filteredZines = mockZines.filter((zine) => {
+  // Combine published books with mock discover books (but keep published books as isOwned: true)
+  const allZines = [
+    ...publishedBooks,
+    ...mockZines.filter((zine) => !zine.isOwned) // Only include non-owned mock books for Discover section
+  ]
+
+  const filteredZines = allZines.filter((zine) => {
     const matchesSearch =
       zine.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       zine.author.toLowerCase().includes(searchQuery.toLowerCase())
@@ -120,9 +193,21 @@ export default function ZineApp() {
     return matchesSearch && matchesGenre
   })
 
-  const genres = ["All", ...Array.from(new Set(mockZines.map((zine) => zine.genre)))]
+  const genres = ["All", ...Array.from(new Set(allZines.map((zine) => zine.genre)))]
 
   const handleZineSelect = (zine: (typeof mockZines)[0]) => {
+    // Check if this is a published book with novel content
+    if ('isPublished' in zine && zine.isPublished) {
+      const fullData = publishedBooksData.get(zine.id)
+      if (fullData && fullData.novelPages) {
+        // Open novel viewer for published novels
+        setSelectedNovel(fullData)
+        setViewMode("novel-viewer")
+        return
+      }
+    }
+    
+    // Default behavior for other zines
     setSelectedZine(zine)
     setViewMode("viewer")
   }
@@ -130,10 +215,45 @@ export default function ZineApp() {
   const handleBackToGallery = () => {
     setViewMode("gallery")
     setSelectedZine(null)
+    setSelectedWorkData(null)
+    setSelectedNovel(null)
   }
 
   const handleCreateNew = () => {
+    setSelectedWorkData(null) // Clear any existing work data for new creation
     setViewMode("creator")
+  }
+
+  // Refresh published books after completion
+  const refreshPublishedBooks = async () => {
+    try {
+      const response = await getZines()
+      const publishedDataMap = new Map()
+      const published = response.zines
+        .filter((zine: any) => zine.status === "published")
+        .map((zine: any) => {
+          // Store full data for viewer
+          publishedDataMap.set(zine.id, zine)
+          
+          return {
+            id: zine.id,
+            title: zine.title,
+            author: zine.author || "You",
+            cover: zine.coverImageUrl || zine.thumbnail || "/placeholder.svg?height=400&width=300",
+            pages: zine.novelPages?.length || zine.pages?.length || 1,
+            genre: zine.category || "Fiction",
+            createdAt: zine.publishedDate || zine.createdAt,
+            isOwned: true,
+            isPublished: true
+          }
+        })
+      
+      setPublishedBooksData(publishedDataMap)
+      setPublishedBooks(published)
+      console.log("Refreshed published books:", published)
+    } catch (error) {
+      console.error("Failed to refresh published books:", error)
+    }
   }
 
   return (
@@ -236,7 +356,11 @@ export default function ZineApp() {
           <ZineViewer key="viewer" zine={selectedZine} onBack={handleBackToGallery} />
         )}
 
-        {viewMode === "creator" && <ZineCreator key="creator" onBack={handleBackToGallery} />}
+        {viewMode === "creator" && <ZineCreator key="creator" onBack={handleBackToGallery} initialData={selectedWorkData} onPublishedBooksUpdate={refreshPublishedBooks} />}
+
+        {viewMode === "novel-viewer" && selectedNovel && (
+          <NovelViewer key="novel-viewer" novelData={selectedNovel} onClose={handleBackToGallery} />
+        )}
       </AnimatePresence>
     </div>
   )

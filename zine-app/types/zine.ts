@@ -44,6 +44,22 @@ export interface ReviewSuggestion {
 export type CreatorMode = "zine" | "novel"
 export type MenuSection = "concept" | "ai-writer" | "worldview" | "writer-review" | "style" | "onepoint"
 
+export interface SavedZineData {
+  id: string
+  title: string
+  pages: Page[]
+  conceptConfig?: any
+  worldviewConfig?: any
+  novelContent?: string
+  novelPages?: string[]
+  coverImageUrl?: string
+  currentMode?: CreatorMode // 🔄 保存時のモードを記録
+  createdAt: string
+  lastModified?: string
+}
+
 export interface ZineCreatorProps {
   onBack: () => void
+  initialData?: SavedZineData | null
+  onPublishedBooksUpdate?: () => void
 }
