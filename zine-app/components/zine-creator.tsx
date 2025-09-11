@@ -31,7 +31,18 @@ import { ZineToolbar } from "./ZineToolbar"
 import { ZineCanvas } from "./ZineCanvas"
 import { ZineMenuPanel } from "./ZineMenuPanel"
 import { CoverGenerationModal } from "./CoverGenerationModal"
+import { SuggestionBubble } from "./SuggestionBubble"
 import { ZineCreatorProps, Element, Page, ChatMessage, TextSelection, ReviewSuggestion, CreatorMode, MenuSection } from "@/types/zine"
+
+// TextSuggestion interface for the new suggestion system
+interface TextSuggestion {
+  id: string
+  originalText: string
+  suggestedText: string
+  position: { x: number, y: number, width: number, height: number }
+  instruction: string
+  timestamp: Date
+}
 
 export function ZineCreator({ onBack }: ZineCreatorProps) {
   const [mode, setMode] = useState<"zine" | "novel">("zine")
@@ -48,8 +59,10 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
   const [isApplyingOnepoint, setIsApplyingOnepoint] = useState(false) // Loading state for onepoint advice
   const [isSaving, setIsSaving] = useState(false) // Loading state for save operation
   const [isGeneratingCover, setIsGeneratingCover] = useState(false) // Loading state for cover image generation
+  const [isApplyingReview, setIsApplyingReview] = useState(false) // Loading state for review chat operations
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null) // Generated cover image URL
   const [showCoverModal, setShowCoverModal] = useState(false) // Cover generation modal state
+  const [textSuggestions, setTextSuggestions] = useState<TextSuggestion[]>([]) // Text suggestions for writer review
 
   const [pages, setPages] = useState<Page[]>([{ id: "page1", elements: [], title: "Page 1-2" }])
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
@@ -67,6 +80,7 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
   const [novelPages, setNovelPages] = useState<string[]>([])
 
   const [selectedText, setSelectedText] = useState<TextSelection | null>(null)
+  const [isSelectionProtected, setIsSelectionProtected] = useState(false) // 選択保護フラグ
   const [reviewSuggestions, setReviewSuggestions] = useState<ReviewSuggestion[]>([])
   const [reviewChatMessages, setReviewChatMessages] = useState<ChatMessage[]>([
     {
@@ -125,30 +139,6 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
     }, 1000)
   }
 
-  const sendReviewMessage = () => {
-    if (!reviewChatInput.trim()) return
-
-    const userMessage: ChatMessage = {
-      id: Date.now().toString(),
-      type: "user", 
-      content: reviewChatInput,
-      timestamp: new Date(),
-    }
-
-    setReviewChatMessages((prev) => [...prev, userMessage])
-    setReviewChatInput("")
-
-    // Simulate AI response
-    setTimeout(() => {
-      const aiMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        type: "ai",
-        content: "素晴らしい作品ですね！より魅力的にするためのアドバイスをお伝えします。",
-        timestamp: new Date(),
-      }
-      setReviewChatMessages((prev) => [...prev, aiMessage])
-    }, 1000)
-  }
 
   const handleStyleModify = async (style: string) => {
     setIsModifyingStyle(true)
@@ -225,7 +215,11 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
   const splitNovelContent = (content: string): string[] => {
     if (!content.trim()) return []
     
-    const CHARS_PER_PAGE = 800 // 1ページあたりの文字数
+    // 固定サイズに正確に収まる文字数を計算
+    // 実効高さ570px ÷ (フォント16px × 行間2.2) ÷ 2ページ = 約8行/ページ
+    // 1行約25文字 × 8行 = 約200文字/ページ（両ページで400文字）
+    const CHARS_PER_PAGE = 400 // 固定画面サイズにピッタリ収まる文字数
+    
     const paragraphs = content.split('\n\n')
     const pages: string[] = []
     let currentPage = ""
@@ -247,8 +241,44 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
       pages.push(currentPage.trim())
     }
     
+    // 最低5ページを保証する
+    const MIN_PAGES = 5
+    if (pages.length < MIN_PAGES && pages.length > 0) {
+      // 現在のページ数が5未満の場合、文字数を減らして再分割
+      const ADJUSTED_CHARS_PER_PAGE = Math.floor(content.length / MIN_PAGES)
+      
+      // 再分割処理
+      const adjustedPages: string[] = []
+      let adjustedCurrentPage = ""
+      
+      for (const paragraph of content.split('\n\n')) {
+        const paragraphWithBreak = paragraph + '\n\n'
+        
+        if (adjustedCurrentPage.length + paragraphWithBreak.length <= ADJUSTED_CHARS_PER_PAGE) {
+          adjustedCurrentPage += paragraphWithBreak
+        } else {
+          if (adjustedCurrentPage.trim()) {
+            adjustedPages.push(adjustedCurrentPage.trim())
+          }
+          adjustedCurrentPage = paragraphWithBreak
+        }
+      }
+      
+      if (adjustedCurrentPage.trim()) {
+        adjustedPages.push(adjustedCurrentPage.trim())
+      }
+      
+      // それでも5ページに満たない場合は空ページを追加
+      while (adjustedPages.length < MIN_PAGES) {
+        adjustedPages.push("")
+      }
+      
+      return adjustedPages
+    }
+    
     return pages.length > 0 ? pages : [content]
   }
+
 
   // 小説モード用のページナビゲーション
   const goToPreviousNovelPage = () => {
@@ -631,11 +661,41 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
     if (selection && selection.toString().trim()) {
       const selectedText = selection.toString()
       const range = selection.getRangeAt(0)
+      
+      // 選択状態を詳細に記録
       setSelectedText({
         start: range.startOffset,
         end: range.endOffset,
         text: selectedText,
       })
+      
+      // 作家レビューモード中は選択を保護
+      if (activeNovelSection === "writer-review") {
+        setIsSelectionProtected(true)
+      }
+    }
+  }
+
+  // 選択をクリアする関数
+  const clearSelection = () => {
+    setSelectedText(null)
+    setIsSelectionProtected(false)
+    
+    // ブラウザの選択もクリア
+    if (typeof window !== "undefined") {
+      const selection = window.getSelection()
+      if (selection) {
+        selection.removeAllRanges()
+      }
+    }
+  }
+
+  // 選択保護をチェックする関数
+  const handleSelectionChange = (event: Event) => {
+    // 保護されている場合は選択解除を防ぐ
+    if (isSelectionProtected && selectedText) {
+      event.preventDefault()
+      return false
     }
   }
 
@@ -647,8 +707,67 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
     }
   }
 
-  const handleReviewChatSend = () => {
+  // Handle text suggestion application
+  const handleApplySuggestion = (suggestionId: string) => {
+    const suggestion = textSuggestions.find(s => s.id === suggestionId)
+    if (!suggestion) return
+
+    // Apply the suggestion to the novel content
+    setNovelContent((prev) => prev.replace(suggestion.originalText, suggestion.suggestedText))
+    
+    // Update pages with the modified content
+    const updatedContent = novelContent.replace(suggestion.originalText, suggestion.suggestedText)
+    const splitPages = splitNovelContent(updatedContent)
+    setNovelPages(splitPages)
+
+    // Add success message to chat
+    const successMessage = {
+      id: Date.now().toString(),
+      type: "ai" as const,
+      content: `修正「${suggestion.instruction}」を適用しました。「${suggestion.originalText}」→「${suggestion.suggestedText}」`,
+      timestamp: new Date(),
+    }
+    setReviewChatMessages((prev) => [...prev, successMessage])
+
+    // Remove the suggestion from the list
+    setTextSuggestions((prev) => prev.filter(s => s.id !== suggestionId))
+  }
+
+  // Handle text suggestion cancellation
+  const handleCancelSuggestion = (suggestionId: string) => {
+    const suggestion = textSuggestions.find(s => s.id === suggestionId)
+    if (!suggestion) return
+
+    // Add cancel message to chat
+    const cancelMessage = {
+      id: Date.now().toString(),
+      type: "ai" as const,
+      content: `修正提案「${suggestion.instruction}」をキャンセルしました。`,
+      timestamp: new Date(),
+    }
+    setReviewChatMessages((prev) => [...prev, cancelMessage])
+
+    // Remove the suggestion from the list
+    setTextSuggestions((prev) => prev.filter(s => s.id !== suggestionId))
+  }
+
+  const handleReviewChatSend = async () => {
     if (!reviewChatInput.trim()) return
+
+    // 選択状態を保存
+    const currentSelection = selectedText
+    
+    // テキストが選択されていない場合の処理
+    if (!currentSelection) {
+      const errorMessage: ChatMessage = {
+        id: Date.now().toString(),
+        type: "ai",
+        content: "修正したいテキストを選択してから指示を入力してください。",
+        timestamp: new Date(),
+      }
+      setReviewChatMessages((prev) => [...prev, errorMessage])
+      return
+    }
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -658,61 +777,74 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
     }
 
     setReviewChatMessages((prev) => [...prev, userMessage])
+    
+    const inputContent = reviewChatInput
+    setReviewChatInput("")
+    
+    // Start loading
+    setIsApplyingReview(true)
 
-    // Simulate AI response with text modification
-    setTimeout(() => {
-      let aiResponse = ""
-      let suggestion: ReviewSuggestion | null = null
-
-      if (selectedText && reviewChatInput.includes("シリアス")) {
-        const modifiedText = selectedText.text.replace("彼女は立ち止まった", "彼女は重い足取りで立ち止まった")
-        suggestion = {
-          id: Date.now().toString(),
-          originalText: selectedText.text,
-          suggestedText: modifiedText,
-          reason: "よりシリアスな表現に変更",
-          applied: false,
+    try {
+      // Get selection position from DOM
+      const getSelectionPosition = () => {
+        if (typeof window === 'undefined') return { x: 100, y: 100, width: 200, height: 20 }
+        
+        const selection = window.getSelection()
+        if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0)
+          const rect = range.getBoundingClientRect()
+          return {
+            x: rect.left + window.scrollX,
+            y: rect.top + window.scrollY,
+            width: rect.width,
+            height: rect.height
+          }
         }
-        aiResponse = `「${selectedText.text}」をよりシリアスな表現に変更しました。`
-
-        // Add inline suggestion
-        setInlineSuggestions((prev) => ({
-          ...prev,
-          [selectedText.text]: suggestion,
-        }))
-      } else if (selectedText && reviewChatInput.includes("感情的")) {
-        const modifiedText = selectedText.text.replace(
-          "彼女の声は風に混じって消えていく",
-          "彼女の声は震えながら風に混じって消えていく",
-        )
-        suggestion = {
-          id: Date.now().toString(),
-          originalText: selectedText.text,
-          suggestedText: modifiedText,
-          reason: "より感情的な表現に変更",
-          applied: false,
-        }
-        aiResponse = `「${selectedText.text}」により感情を込めた表現に修正しました。`
-
-        setInlineSuggestions((prev) => ({
-          ...prev,
-          [selectedText.text]: suggestion,
-        }))
-      } else {
-        aiResponse = "どの部分を修正したいか、テキストを選択してから指示してください。"
+        return { x: 100, y: 100, width: 200, height: 20 }
       }
 
-      const aiMessage: ChatMessage = {
+      // review APIを使用してテキストを修正提案を生成
+      const result = await review({
+        original: currentSelection.text,
+        instruction: `以下の指示に従って、選択されたテキストを修正してください: ${inputContent}`
+      })
+      
+      // Create suggestion instead of applying directly
+      const suggestionId = Date.now().toString()
+      const newSuggestion: TextSuggestion = {
+        id: suggestionId,
+        originalText: currentSelection.text,
+        suggestedText: result.text,
+        position: getSelectionPosition(),
+        instruction: inputContent,
+        timestamp: new Date()
+      }
+      
+      // Add suggestion to state
+      setTextSuggestions((prev) => [...prev, newSuggestion])
+      
+      const aiResponse = {
         id: (Date.now() + 1).toString(),
-        type: "ai",
-        content: aiResponse,
+        type: "ai" as const,
+        content: `「${inputContent}」の指示に基づいて修正提案を作成しました。右側の吹き出しで確認してください。`,
         timestamp: new Date(),
       }
-
-      setReviewChatMessages((prev) => [...prev, aiMessage])
-    }, 1000)
-
-    setReviewChatInput("")
+      
+      setReviewChatMessages((prev) => [...prev, aiResponse])
+      
+    } catch (error) {
+      console.error("レビュー修正エラー:", error)
+      const errorResponse = {
+        id: (Date.now() + 1).toString(),
+        type: "ai" as const,
+        content: `申し訳ありません。修正提案の生成中にエラーが発生しました: ${error instanceof Error ? error.message : '不明なエラー'}`,
+        timestamp: new Date(),
+      }
+      setReviewChatMessages((prev) => [...prev, errorResponse])
+    } finally {
+      // End loading
+      setIsApplyingReview(false)
+    }
   }
 
   const applyInlineSuggestion = (originalText: string) => {
@@ -1569,6 +1701,7 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
         isModifyingStyle={isModifyingStyle}
         isApplyingOnepoint={isApplyingOnepoint}
         isGeneratingCover={isGeneratingCover}
+        isApplyingReview={isApplyingReview}
       />
 
       {showZineExamples && (
@@ -2065,7 +2198,10 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
           reviewChatMessages={reviewChatMessages}
           reviewChatInput={reviewChatInput}
           setReviewChatInput={setReviewChatInput}
-          onSendReviewMessage={sendReviewMessage}
+          onSendReviewMessage={handleReviewChatSend}
+          selectedText={selectedText}
+          onClearSelection={clearSelection}
+          isSelectionProtected={isSelectionProtected}
           onStyleModify={handleStyleModify}
           isModifyingStyle={isModifyingStyle}
           onOnepointModify={handleOnepointModify}
@@ -2161,7 +2297,7 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
                             className={`w-6 h-6 rounded-full hover:scale-110 transition-transform ${bookTheme === "light" ? "ring-2" : ""}`}
                             style={{
                               background: "#f8f6f0",
-                              ringColor: bookTheme === "light" ? "#daa520" : "transparent"
+                              border: bookTheme === "light" ? "2px solid #daa520" : "2px solid transparent"
                             }}
                           />
                           <Button
@@ -2171,7 +2307,7 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
                             className={`w-6 h-6 rounded-full hover:scale-110 transition-transform ${bookTheme === "sepia" ? "ring-2" : ""}`}
                             style={{
                               background: "#f4ead0",
-                              ringColor: bookTheme === "sepia" ? "#daa520" : "transparent"
+                              border: bookTheme === "sepia" ? "2px solid #daa520" : "2px solid transparent"
                             }}
                           />
                           <Button
@@ -2181,7 +2317,7 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
                             className={`w-6 h-6 rounded-full hover:scale-110 transition-transform ${bookTheme === "dark" ? "ring-2" : ""}`}
                             style={{
                               background: "#2a2520",
-                              ringColor: bookTheme === "dark" ? "#daa520" : "transparent"
+                              border: bookTheme === "dark" ? "2px solid #daa520" : "2px solid transparent"
                             }}
                           />
                         </div>
@@ -2190,6 +2326,41 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
                         </Button>
                         <Button variant="ghost" size="sm" className="hover:bg-amber-100" style={{ color: "#daa520" }}>
                           <BookOpen className="w-4 h-4" />
+                        </Button>
+                      </div>
+
+                      {/* Novel Page Navigation */}
+                      <div className="w-full max-w-6xl mx-auto mb-6 flex justify-center items-center gap-4">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={goToPreviousNovelPage}
+                          disabled={currentNovelPage <= 1}
+                          className="border-amber-600 text-amber-600 hover:bg-amber-50 disabled:opacity-50"
+                        >
+                          <ChevronLeft className="w-4 h-4 mr-1" />
+                          前のページ
+                        </Button>
+                        
+                        <div className="px-4 py-2 rounded-lg" style={{ 
+                          background: "rgba(139, 105, 20, 0.1)", 
+                          border: "1px solid rgba(139, 105, 20, 0.3)",
+                          color: "#8b6914"
+                        }}>
+                          <span className="text-sm font-medium">
+                            {currentNovelPage} / {Math.max(1, Math.ceil(novelPages.length / 2))}
+                          </span>
+                        </div>
+                        
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={goToNextNovelPage}
+                          disabled={currentNovelPage >= Math.max(1, Math.ceil(novelPages.length / 2))}
+                          className="border-amber-600 text-amber-600 hover:bg-amber-50 disabled:opacity-50"
+                        >
+                          次のページ
+                          <ChevronRight className="w-4 h-4 ml-1" />
                         </Button>
                       </div>
 
@@ -2286,15 +2457,24 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
                             }}></div>
                           </div>
 
+                          {/* Fixed page numbers at the bottom */}
+                          <div className="absolute bottom-6 w-full flex justify-between px-6 z-40">
+                            <div className="w-1/2 text-center">
+                              <span className="text-xs" style={{ color: "#a0896c", fontFamily: "serif" }}>{currentNovelPage * 2}</span>
+                            </div>
+                            <div className="w-1/2 text-center">
+                              <span className="text-xs" style={{ color: "#a0896c", fontFamily: "serif" }}>{currentNovelPage * 2 + 1}</span>
+                            </div>
+                          </div>
+
                           {/* Page content container */}
                           <div className="flex h-full relative z-10">
-                            {/* Left page with page number */}
+                            {/* Left page */}
                             <div className="w-1/2 pr-4 relative">
                               <div className="absolute top-6 left-6 text-xs" style={{ color: "#a0896c", fontFamily: "serif" }}>Chapter 1</div>
-                              <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 text-xs" style={{ color: "#a0896c", fontFamily: "serif" }}>{currentNovelPage * 2}</div>
                               <div className="px-12 py-20 h-full">
                                 <div
-                                  className="text-base leading-8 whitespace-pre-wrap cursor-text"
+                                  className="text-base leading-8 whitespace-pre-wrap cursor-text h-full"
                                   style={{
                                     color: currentTheme.text,
                                     fontFamily: 'Georgia, "Times New Roman", serif',
@@ -2302,6 +2482,18 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
                                     textShadow: "0 1px 2px rgba(0,0,0,0.05)",
                                   }}
                                   onMouseUp={handleTextSelection}
+                                  onMouseDown={(e) => {
+                                    // 作家レビューモードで既に選択がある場合、新しい選択を防ぐ
+                                    if (isSelectionProtected && selectedText) {
+                                      e.preventDefault()
+                                    }
+                                  }}
+                                  onFocus={(e) => {
+                                    // フォーカス時に選択が失われるのを防ぐ
+                                    if (isSelectionProtected && selectedText) {
+                                      e.preventDefault()
+                                    }
+                                  }}
                                 >
                                   {novelPages.length > 0 
                                     ? renderTextWithSuggestions(novelPages[(currentNovelPage - 1) * 2] || "")
@@ -2314,12 +2506,11 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
                               </div>
                             </div>
 
-                            {/* Right page with page number */}
+                            {/* Right page */}
                             <div className="w-1/2 pl-4 relative">
-                              <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 text-xs" style={{ color: "#a0896c", fontFamily: "serif" }}>{currentNovelPage * 2 + 1}</div>
                               <div className="px-12 py-20 h-full">
                                 <div
-                                  className="text-base leading-8 whitespace-pre-wrap"
+                                  className="text-base leading-8 whitespace-pre-wrap h-full"
                                   style={{
                                     color: currentTheme.text,
                                     fontFamily: 'Georgia, "Times New Roman", serif',
@@ -2415,6 +2606,16 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
           )}
         </div>
       </div>
+      
+      {/* Text Suggestion Bubbles */}
+      {textSuggestions.map((suggestion) => (
+        <SuggestionBubble
+          key={suggestion.id}
+          suggestion={suggestion}
+          onApply={handleApplySuggestion}
+          onCancel={handleCancelSuggestion}
+        />
+      ))}
       
       {/* Cover Generation Modal */}
       <CoverGenerationModal

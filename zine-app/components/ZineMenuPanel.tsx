@@ -51,6 +51,8 @@ interface ZineMenuPanelProps {
   setReviewChatInput: (input: string) => void
   onSendReviewMessage: () => void
   selectedText?: { start: number; end: number; text: string } | null
+  onClearSelection?: () => void
+  isSelectionProtected?: boolean
   // Style Panel props
   onStyleModify: (style: string) => void
   isModifyingStyle: boolean
@@ -99,6 +101,8 @@ export function ZineMenuPanel({
   setReviewChatInput,
   onSendReviewMessage,
   selectedText,
+  onClearSelection,
+  isSelectionProtected,
   onStyleModify,
   isModifyingStyle,
   onOnepointModify,
@@ -125,16 +129,33 @@ export function ZineMenuPanel({
             border: "2px solid #fbbf24",
             boxShadow: "0 2px 4px rgba(251, 191, 36, 0.1)"
           }}>
-            <div className="flex items-center gap-2 mb-2">
-              <div className="text-xs font-semibold" style={{ color: "#92400e" }}>
-                ✨ 選択中のテキスト
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <div className="text-xs font-semibold" style={{ color: "#92400e" }}>
+                  ✨ 選択中のテキスト
+                  {isSelectionProtected && (
+                    <span className="ml-1 text-xs" style={{ color: "#059669" }}>🔒</span>
+                  )}
+                </div>
+                <div className="text-xs px-2 py-0.5 rounded-full" style={{
+                  background: "#fef3c7",
+                  color: "#92400e"
+                }}>
+                  {selectedText.text.length}文字
+                </div>
               </div>
-              <div className="text-xs px-2 py-0.5 rounded-full" style={{
-                background: "#fef3c7",
-                color: "#92400e"
-              }}>
-                {selectedText.text.length}文字
-              </div>
+              {onClearSelection && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={onClearSelection}
+                  className="h-6 px-2 text-xs hover:bg-red-50"
+                  style={{ color: "#dc2626" }}
+                >
+                  <X className="w-3 h-3 mr-1" />
+                  クリア
+                </Button>
+              )}
             </div>
             <div className="p-2 rounded text-xs" style={{ 
               background: "white",
