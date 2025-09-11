@@ -90,38 +90,7 @@ export function ZineToolbar({
               }}
             />
             
-            {/* Page Navigation for ZINE mode moved below editor */}
             
-            {/* Novel Page Navigation */}
-            {mode === "novel" && currentNovelPage && totalNovelPages && totalNovelPages > 0 && (
-              <div className="flex items-center gap-2 ml-6">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={onPreviousNovelPage}
-                  disabled={currentNovelPage === 1}
-                  className="text-opacity-80 hover:text-opacity-100 transition-all duration-200"
-                  style={{ color: currentNovelPage === 1 ? "#ccc" : "#4a3c28" }}
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </Button>
-                
-                <span className="text-sm px-3 whitespace-nowrap" style={{ color: "#8b7355", writingMode: "horizontal-tb" }}>
-                  見開き {currentNovelPage} / {Math.ceil(totalNovelPages / 2)}
-                </span>
-                
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={onNextNovelPage}
-                  disabled={currentNovelPage >= Math.ceil(totalNovelPages / 2)}
-                  className="text-opacity-80 hover:text-opacity-100 transition-all duration-200"
-                  style={{ color: currentNovelPage >= Math.ceil(totalNovelPages / 2) ? "#ccc" : "#4a3c28" }}
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </Button>
-              </div>
-            )}
           </motion.div>
 
           <div className="flex items-center gap-3">

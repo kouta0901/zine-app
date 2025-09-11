@@ -31,7 +31,8 @@ export function ZineCanvas({
   onAddImageAt
 }: ZineCanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null)
-  const [zoom, setZoom] = useState(0.6) // Start with smaller zoom to fit screen
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [zoom, setZoom] = useState(1.0) // Start with 100% zoom
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 })
   const [isPanning, setIsPanning] = useState(false)
   const [lastPanPoint, setLastPanPoint] = useState({ x: 0, y: 0 })
@@ -40,11 +41,53 @@ export function ZineCanvas({
   const [resizingElement, setResizingElement] = useState<string | null>(null)
   const [resizeHandle, setResizeHandle] = useState<string | null>(null)
   const [initialResize, setInitialResize] = useState({ width: 0, height: 0, x: 0, y: 0, mouseX: 0, mouseY: 0 })
+  const [canvasSize, setCanvasSize] = useState({ width: 1400, height: 900 })
+  
+  // Page boundaries definition (in original 1400px canvas space)
+  const PAGE_BOUNDARIES = {
+    leftPage: { start: 0, end: 680 },
+    centerBinding: { start: 680, end: 720 }, // 40px no-go zone
+    rightPage: { start: 720, end: 1400 }
+  }
   
   // Improved zoom and touch handling
   const touchState = useRef({ initialDistance: 0, initialZoom: 0, lastDistance: 0 })
   const minZoom = 0.2
   const maxZoom = 3
+  
+  // Calculate responsive canvas size based on viewport
+  useEffect(() => {
+    const updateCanvasSize = () => {
+      if (containerRef.current) {
+        const containerRect = containerRef.current.getBoundingClientRect()
+        const aspectRatio = 1400 / 900
+        const padding = 40 // Padding around canvas
+        
+        let newWidth = containerRect.width - padding * 2
+        let newHeight = containerRect.height - padding * 2
+        
+        // Maintain aspect ratio
+        if (newWidth / newHeight > aspectRatio) {
+          newWidth = newHeight * aspectRatio
+        } else {
+          newHeight = newWidth / aspectRatio
+        }
+        
+        // Set minimum and maximum sizes
+        newWidth = Math.max(800, Math.min(1600, newWidth))
+        newHeight = Math.max(514, Math.min(1029, newHeight))
+        
+        setCanvasSize({ width: newWidth, height: newHeight })
+        
+        // Start with 100% zoom (1.0) for better visibility
+        setZoom(1.0)
+      }
+    }
+    
+    updateCanvasSize()
+    window.addEventListener('resize', updateCanvasSize)
+    return () => window.removeEventListener('resize', updateCanvasSize)
+  }, [])
 
   // Handle zoom with wheel/trackpad - properly handle passive events
   const handleWheel = useCallback((e: React.WheelEvent) => {
@@ -153,14 +196,48 @@ export function ZineCanvas({
     setIsPanning(false)
   }, [])
 
+  // Helper function to check if element crosses page boundary
+  const crossesPageBoundary = (x: number, width: number) => {
+    const leftEnd = x + width
+    // Check if element crosses into center binding area
+    return (x < PAGE_BOUNDARIES.centerBinding.end && leftEnd > PAGE_BOUNDARIES.centerBinding.start)
+  }
+  
+  // Helper function to constrain element to avoid page crossing
+  const constrainToPage = (x: number, width: number) => {
+    // If element starts in left page
+    if (x < PAGE_BOUNDARIES.centerBinding.start) {
+      // Constrain to left page
+      const maxX = PAGE_BOUNDARIES.leftPage.end - width
+      return Math.min(x, maxX)
+    }
+    // If element starts in right page
+    else {
+      // Ensure it doesn't go into center binding
+      return Math.max(x, PAGE_BOUNDARIES.rightPage.start)
+    }
+  }
+  
+  // Convert between canvas coordinates and scaled coordinates
+  const scaleCoordinate = (value: number, isWidth: boolean = false) => {
+    const scaleFactor = canvasSize.width / 1400
+    return value * scaleFactor
+  }
+  
+  const unscaleCoordinate = (value: number, isWidth: boolean = false) => {
+    const scaleFactor = canvasSize.width / 1400
+    return value / scaleFactor
+  }
+
   // Handle mouse move for dragging, resizing and panning
   const handleMouseMove = (e: React.MouseEvent) => {
     // Handle element resizing first (highest priority)
     if (resizingElement && canvasRef.current) {
       const element = currentPage.elements.find(el => el.id === resizingElement)
       if (element) {
-        const deltaX = (e.clientX - initialResize.mouseX) / zoom
-        const deltaY = (e.clientY - initialResize.mouseY) / zoom
+        const scaleFactor = canvasSize.width / 1400
+        const deltaX = (e.clientX - initialResize.mouseX) / (zoom * scaleFactor)
+        const deltaY = (e.clientY - initialResize.mouseY) / (zoom * scaleFactor)
         
         let newWidth = initialResize.width
         let newHeight = initialResize.height
@@ -197,6 +274,14 @@ export function ZineCanvas({
           }
         }
         
+        // Prevent resizing across page boundary
+        if (crossesPageBoundary(newX, newWidth)) {
+          // Limit width to not cross boundary
+          if (newX < PAGE_BOUNDARIES.centerBinding.start) {
+            newWidth = Math.min(newWidth, PAGE_BOUNDARIES.leftPage.end - newX)
+          }
+        }
+        
         updateElement(resizingElement, { 
           width: newWidth, 
           height: newHeight, 
@@ -209,17 +294,21 @@ export function ZineCanvas({
     } else if (draggedElement && canvasRef.current) {
       // Handle element dragging
       const canvasRect = canvasRef.current.getBoundingClientRect()
-      // Account for zoom when calculating position
-      const scaledX = (e.clientX - canvasRect.left) / zoom - dragOffset.x
-      const scaledY = (e.clientY - canvasRect.top) / zoom - dragOffset.y
+      const scaleFactor = canvasSize.width / 1400
+      // Account for zoom and scale when calculating position
+      const scaledX = (e.clientX - canvasRect.left) / (zoom * scaleFactor) - dragOffset.x
+      const scaledY = (e.clientY - canvasRect.top) / (zoom * scaleFactor) - dragOffset.y
       
       // Constrain to canvas bounds
       const element = currentPage.elements.find(el => el.id === draggedElement)
       if (element) {
-        const maxX = (canvasRect.width / zoom) - element.width
-        const maxY = (canvasRect.height / zoom) - element.height
-        const constrainedX = Math.max(0, Math.min(scaledX, maxX))
+        const maxX = 1400 - element.width
+        const maxY = 900 - element.height
+        let constrainedX = Math.max(0, Math.min(scaledX, maxX))
         const constrainedY = Math.max(0, Math.min(scaledY, maxY))
+        
+        // Apply page boundary constraints
+        constrainedX = constrainToPage(constrainedX, element.width)
         
         updateElement(draggedElement, { x: constrainedX, y: constrainedY })
       }
@@ -242,9 +331,10 @@ export function ZineCanvas({
     // Only open menu if clicking on empty space
     if (!isElementClick && !draggedElement && !isPanning) {
       const rect = canvasRef.current.getBoundingClientRect()
-      // Account for zoom when calculating menu position
-      const x = (e.clientX - rect.left) / zoom
-      const y = (e.clientY - rect.top) / zoom
+      const scaleFactor = canvasSize.width / 1400
+      // Account for zoom and scale when calculating menu position
+      const x = (e.clientX - rect.left) / (zoom * scaleFactor)
+      const y = (e.clientY - rect.top) / (zoom * scaleFactor)
       setMenuPos({ x, y })
       setMenuOpen(true)
     }
@@ -265,7 +355,7 @@ export function ZineCanvas({
   }
 
   return (
-    <div className="relative w-full h-full">
+    <div ref={containerRef} className="relative w-full h-full">
       {/* Zoom indicator */}
       <div className="absolute top-4 right-4 z-10 bg-black/20 backdrop-blur-sm rounded-lg px-3 py-1 text-white text-sm font-medium">
         {Math.round(zoom * 100)}%
@@ -321,8 +411,8 @@ export function ZineCanvas({
           <motion.div
             className="relative rounded-xl"
             style={{
-              width: 1400,
-              height: 900,
+              width: canvasSize.width,
+              height: canvasSize.height,
               filter: "drop-shadow(0 25px 50px rgba(0,0,0,0.4))",
               transformOrigin: "center center",
               cursor: !draggedElement ? (isPanning ? "grabbing" : "grab") : "default"
@@ -373,14 +463,38 @@ export function ZineCanvas({
               }}
             />
 
-            {/* Center binding with shadow */}
+            {/* Center binding with shadow and visual guide */}
             <div
-              className="absolute left-1/2 top-4 bottom-4 transform -translate-x-0.5"
+              className="absolute top-4 bottom-4"
               style={{
-                width: "4px",
-                background: "linear-gradient(to right, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.05) 50%, rgba(0,0,0,0.2) 100%)",
-                boxShadow: "inset 0 0 20px rgba(0,0,0,0.15), 0 0 5px rgba(0,0,0,0.1)",
-                borderRadius: "2px",
+                left: `${(PAGE_BOUNDARIES.centerBinding.start / 1400) * 100}%`,
+                width: `${((PAGE_BOUNDARIES.centerBinding.end - PAGE_BOUNDARIES.centerBinding.start) / 1400) * 100}%`,
+                background: "linear-gradient(90deg, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.15) 45%, rgba(0,0,0,0.15) 55%, rgba(0,0,0,0.08) 100%)",
+                boxShadow: "inset 0 0 30px rgba(0,0,0,0.2), 0 0 10px rgba(0,0,0,0.15)",
+                borderLeft: "1px dashed rgba(139, 69, 19, 0.2)",
+                borderRight: "1px dashed rgba(139, 69, 19, 0.2)",
+                pointerEvents: "none",
+                zIndex: 10
+              }}
+            />
+            
+            {/* Page boundary indicators */}
+            <div
+              className="absolute top-0 bottom-0"
+              style={{
+                left: 0,
+                width: `${(PAGE_BOUNDARIES.leftPage.end / 1400) * 100}%`,
+                borderRight: "1px dotted rgba(139, 69, 19, 0.1)",
+                pointerEvents: "none"
+              }}
+            />
+            <div
+              className="absolute top-0 bottom-0"
+              style={{
+                left: `${(PAGE_BOUNDARIES.rightPage.start / 1400) * 100}%`,
+                right: 0,
+                borderLeft: "1px dotted rgba(139, 69, 19, 0.1)",
+                pointerEvents: "none"
               }}
             />
 
@@ -392,20 +506,26 @@ export function ZineCanvas({
               onClick={handleCanvasClick}
             >
               {/* Render page elements */}
-              {currentPage.elements.map((element) => (
-                <div
-                  key={element.id}
-                  data-element
-                  className={`absolute cursor-move border-2 ${
-                    selectedElement === element.id ? "border-purple-500 shadow-lg" : "border-transparent"
-                  } hover:border-purple-300 ${draggedElement === element.id ? "transition-none" : "transition-colors duration-150"}`}
-                  style={{
-                    left: element.x,
-                    top: element.y,
-                    width: element.width,
-                    height: element.height,
-                    zIndex: draggedElement === element.id ? 1000 : 1,
-                  }}
+              {currentPage.elements.map((element) => {
+                const scaleFactor = canvasSize.width / 1400
+                const isInCenterBinding = crossesPageBoundary(element.x, element.width)
+                
+                return (
+                  <div
+                    key={element.id}
+                    data-element
+                    className={`absolute cursor-move border-2 ${
+                      selectedElement === element.id ? "border-purple-500 shadow-lg" : "border-transparent"
+                    } hover:border-purple-300 ${draggedElement === element.id ? "transition-none" : "transition-colors duration-150"} ${
+                      isInCenterBinding ? "opacity-50" : ""
+                    }`}
+                    style={{
+                      left: scaleCoordinate(element.x),
+                      top: scaleCoordinate(element.y),
+                      width: scaleCoordinate(element.width),
+                      height: scaleCoordinate(element.height),
+                      zIndex: draggedElement === element.id ? 1000 : 1,
+                    }}
                   onClick={(e) => {
                     e.stopPropagation()
                     setSelectedElement(element.id)
@@ -418,18 +538,19 @@ export function ZineCanvas({
                       }
                     }
                   }}
-                  onMouseDown={(e) => {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    setDraggedElement(element.id)
-                    setSelectedElement(element.id)
-                    // Calculate offset within the element accounting for zoom
-                    const rect = e.currentTarget.getBoundingClientRect()
-                    setDragOffset({
-                      x: (e.clientX - rect.left) / zoom,
-                      y: (e.clientY - rect.top) / zoom,
-                    })
-                  }}
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setDraggedElement(element.id)
+                      setSelectedElement(element.id)
+                      // Calculate offset within the element accounting for zoom and scale
+                      const rect = e.currentTarget.getBoundingClientRect()
+                      const scaleFactor = canvasSize.width / 1400
+                      setDragOffset({
+                        x: (e.clientX - rect.left) / (zoom * scaleFactor),
+                        y: (e.clientY - rect.top) / (zoom * scaleFactor),
+                      })
+                    }}
                   onMouseUp={() => {
                     setDraggedElement(null)
                   }}
@@ -608,23 +729,25 @@ export function ZineCanvas({
                       }}
                     />
                   )}
-                </div>
-              ))}
+                  </div>
+                )
+              })}
 
               {/* Empty state with modern design */}
               {currentPage.elements.length === 0 && (
                 <div className="absolute inset-0 flex">
-                  <div className="flex-1 flex items-center justify-center">
-                    <div className="text-center text-gray-400">
-                      <div className="text-lg font-medium mb-2">左ページ</div>
-                      <div className="text-sm opacity-70">ここに要素を配置します</div>
-                    </div>
+                  <div 
+                    className="flex items-center justify-center"
+                    style={{ width: `${(PAGE_BOUNDARIES.leftPage.end / 1400) * 100}%` }}
+                  >
                   </div>
-                  <div className="flex-1 flex items-center justify-center">
-                    <div className="text-center text-gray-400">
-                      <div className="text-lg font-medium mb-2">右ページ</div>
-                      <div className="text-sm opacity-70">テキストや画像をドラッグ&ドロップ</div>
-                    </div>
+                  <div 
+                    className="flex items-center justify-center"
+                    style={{ 
+                      width: `${((1400 - PAGE_BOUNDARIES.rightPage.start) / 1400) * 100}%`,
+                      marginLeft: `${(PAGE_BOUNDARIES.rightPage.start / 1400) * 100}%`
+                    }}
+                  >
                   </div>
                 </div>
               )}
@@ -633,7 +756,11 @@ export function ZineCanvas({
             {menuOpen && (
               <div
                 className="absolute bg-white/95 rounded-md shadow-lg border z-50"
-                style={{ left: menuPos.x + 8, top: menuPos.y + 8, borderColor: "#e5dcc9" }}
+                style={{ 
+                  left: scaleCoordinate(menuPos.x) + 8, 
+                  top: scaleCoordinate(menuPos.y) + 8, 
+                  borderColor: "#e5dcc9" 
+                }}
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="flex flex-col">

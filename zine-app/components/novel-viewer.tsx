@@ -4,6 +4,8 @@ import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { ChevronLeft, ChevronRight, X, BookOpen, Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { CreatorMode } from "@/types/zine"
+import { EditModeSelector } from "./EditModeSelector"
 
 interface NovelViewerProps {
   novelData: {
@@ -16,9 +18,10 @@ interface NovelViewerProps {
     createdAt?: string
   }
   onClose: () => void
+  onEdit?: (mode: CreatorMode) => void
 }
 
-export function NovelViewer({ novelData, onClose }: NovelViewerProps) {
+export function NovelViewer({ novelData, onClose, onEdit }: NovelViewerProps) {
   const [currentPage, setCurrentPage] = useState(0)
   const pages = novelData.novelPages || []
   const hasCover = !!novelData.coverImageUrl
@@ -80,6 +83,12 @@ export function NovelViewer({ novelData, onClose }: NovelViewerProps) {
         </div>
         
         <div className="flex items-center gap-4 text-white">
+          {onEdit && (
+            <EditModeSelector
+              onSelectMode={(mode) => onEdit(mode)}
+              onClose={() => {}}
+            />
+          )}
           <span className="text-sm opacity-70">
             {currentPage + 1} / {totalPages}
           </span>

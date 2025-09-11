@@ -50,6 +50,7 @@ interface ZineMenuPanelProps {
   reviewChatInput: string
   setReviewChatInput: (input: string) => void
   onSendReviewMessage: () => void
+  selectedText?: { start: number; end: number; text: string } | null
   // Style Panel props
   onStyleModify: (style: string) => void
   isModifyingStyle: boolean
@@ -97,6 +98,7 @@ export function ZineMenuPanel({
   reviewChatInput,
   setReviewChatInput,
   onSendReviewMessage,
+  selectedText,
   onStyleModify,
   isModifyingStyle,
   onOnepointModify,
@@ -114,9 +116,50 @@ export function ZineMenuPanel({
   ]
 
   const renderWriterReviewPanel = () => (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col overflow-hidden" style={{ height: "calc(100vh - 200px)", maxHeight: "calc(100vh - 200px)" }}>
+      {/* Selected Text Display */}
+      <div className="flex-shrink-0 p-4 border-b" style={{ borderColor: "rgba(139, 115, 85, 0.3)" }}>
+        {selectedText ? (
+          <div className="mb-2 p-3 rounded text-sm" style={{
+            background: "linear-gradient(135deg, rgba(255, 235, 59, 0.1) 0%, rgba(255, 235, 59, 0.05) 100%)",
+            border: "2px solid #fbbf24",
+            boxShadow: "0 2px 4px rgba(251, 191, 36, 0.1)"
+          }}>
+            <div className="flex items-center gap-2 mb-2">
+              <div className="text-xs font-semibold" style={{ color: "#92400e" }}>
+                ✨ 選択中のテキスト
+              </div>
+              <div className="text-xs px-2 py-0.5 rounded-full" style={{
+                background: "#fef3c7",
+                color: "#92400e"
+              }}>
+                {selectedText.text.length}文字
+              </div>
+            </div>
+            <div className="p-2 rounded text-xs" style={{ 
+              background: "white",
+              color: "#4a3c28",
+              maxHeight: "60px",
+              overflowY: "auto",
+              lineHeight: "1.4"
+            }}>
+              「{selectedText.text}」
+            </div>
+          </div>
+        ) : (
+          <div className="p-3 rounded text-sm" style={{
+            background: "rgba(200, 200, 200, 0.1)",
+            border: "1px dashed rgba(139, 169, 199, 0.4)"
+          }}>
+            <div className="text-xs" style={{ color: "#8b9aaf" }}>
+              📝 レビューしたいテキストを本文から選択してください
+            </div>
+          </div>
+        )}
+      </div>
+      
       {/* Chat Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4" style={{ minHeight: "100px", maxHeight: "calc(100vh - 400px)" }}>
         {reviewChatMessages.map((message) => (
           <div
             key={message.id}
@@ -146,7 +189,7 @@ export function ZineMenuPanel({
       </div>
       
       {/* Input Area */}
-      <div className="p-4 border-t" style={{ borderColor: "rgba(139, 115, 85, 0.3)" }}>
+      <div className="flex-shrink-0 p-4 border-t bg-opacity-95" style={{ borderColor: "rgba(139, 115, 85, 0.3)", backgroundColor: "rgba(247, 241, 232, 0.95)" }}>
         <div className="flex gap-2">
           <Input
             placeholder="作品について相談する..."
@@ -235,10 +278,11 @@ export function ZineMenuPanel({
 
   return (
     <motion.div
-      className="w-80 backdrop-blur-sm border-r p-6 pt-20"
+      className="w-80 backdrop-blur-sm border-r p-6 pt-20 h-screen overflow-y-auto"
       style={{
         background: "rgba(247, 241, 232, 0.9)",
-        borderColor: "rgba(139, 115, 85, 0.3)"
+        borderColor: "rgba(139, 115, 85, 0.3)",
+        maxHeight: "100vh"
       }}
       initial={{ x: -50, opacity: 0 }}
       animate={{ x: 0, opacity: 1 }}

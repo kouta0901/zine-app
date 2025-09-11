@@ -11,7 +11,7 @@ import { ZineCreator } from "@/components/zine-creator"
 import { NovelViewer } from "@/components/novel-viewer"
 import { CustomCursor } from "@/components/custom-cursor"
 import { getZineWithDetails, getZines } from "@/lib/api"
-import { SavedZineData } from "@/types/zine"
+import { SavedZineData, CreatorMode } from "@/types/zine"
 
 const mockZines = [
   {
@@ -195,19 +195,104 @@ export default function ZineApp() {
 
   const genres = ["All", ...Array.from(new Set(allZines.map((zine) => zine.genre)))]
 
-  const handleZineSelect = (zine: (typeof mockZines)[0]) => {
-    // Check if this is a published book with novel content
+  const handleZineSelect = async (zine: (typeof mockZines)[0]) => {
+    console.log('🎯 ZineSelect called with:', zine)
+    
+    // Check if this is a published book
     if ('isPublished' in zine && zine.isPublished) {
+      console.log('📚 Published book detected:', zine.id)
       const fullData = publishedBooksData.get(zine.id)
-      if (fullData && fullData.novelPages) {
-        // Open novel viewer for published novels
-        setSelectedNovel(fullData)
-        setViewMode("novel-viewer")
-        return
+      console.log('📦 Full data from map:', fullData)
+      
+      if (fullData) {
+        console.log('🔍 Analyzing fullData mode and content:')
+        console.log('  - currentMode:', fullData.currentMode)
+        console.log('  - has novelPages:', !!fullData.novelPages, 'length:', fullData.novelPages?.length || 0)
+        console.log('  - has pages:', !!fullData.pages, 'length:', fullData.pages?.length || 0)
+        
+        // Mode-based routing: prioritize currentMode over data presence
+        if (fullData.currentMode === "novel" && fullData.novelPages && fullData.novelPages.length > 0) {
+          console.log('📖 Opening novel viewer based on currentMode for:', fullData.title)
+          // Open novel viewer for published novels
+          setSelectedNovel(fullData)
+          setViewMode("novel-viewer")
+          return
+        } else if (fullData.currentMode === "zine" && fullData.pages) {
+          console.log('📄 Opening ZINE viewer based on currentMode. Page count:', fullData.pages?.length)
+          // Load full ZINE data for ZINE viewer
+          try {
+            const zineData = await getZineWithDetails(zine.id)
+            console.log('🔄 Loaded ZINE data:', zineData)
+            
+            if (zineData) {
+              console.log('✅ ZINE data loaded successfully:')
+              console.log('  - Title:', zineData.title)
+              console.log('  - Pages count:', zineData.pages?.length)
+              console.log('  - Cover URL:', zineData.coverImageUrl)
+              console.log('  - Page details:', zineData.pages?.map(p => ({ id: p.id, elementsCount: p.elements?.length })))
+              
+              // Pass the full ZINE data to viewer
+              setSelectedWorkData(zineData)
+              setSelectedZine(zine)
+              setViewMode("viewer")
+              return
+            } else {
+              console.warn('⚠️ No ZINE data returned from getZineWithDetails')
+            }
+          } catch (error) {
+            console.error('❌ Failed to load ZINE data for viewer:', error)
+            // Try to use local data as fallback
+            if (fullData.pages && fullData.pages.length > 0) {
+              console.log('🔄 Using cached fullData as fallback for ZINE viewer')
+              setSelectedWorkData(fullData)
+              setSelectedZine(zine)
+              setViewMode("viewer")
+              return
+            }
+          }
+        } else {
+          console.log('🔄 No mode match or missing data, trying fallback logic:')
+          
+          // Fallback: try original logic for backward compatibility
+          if (fullData.novelPages && fullData.novelPages.length > 0) {
+            console.log('📖 Fallback: Opening novel viewer due to novelPages')
+            setSelectedNovel(fullData)
+            setViewMode("novel-viewer")
+            return
+          } else if (fullData.pages && fullData.pages.length > 0) {
+            console.log('📄 Fallback: Opening ZINE viewer due to pages')
+            try {
+              const zineData = await getZineWithDetails(zine.id)
+              if (zineData) {
+                setSelectedWorkData(zineData)
+                setSelectedZine(zine)
+                setViewMode("viewer")
+                return
+              }
+            } catch (error) {
+              console.error('❌ Fallback ZINE loading failed:', error)
+              // Use cached data as last resort
+              if (fullData.pages && fullData.pages.length > 0) {
+                console.log('🔄 Using cached fullData as final fallback')
+                setSelectedWorkData(fullData)
+                setSelectedZine(zine)
+                setViewMode("viewer")
+                return
+              }
+            }
+          } else {
+            console.log('🤷 No usable content found in fullData')
+          }
+        }
+      } else {
+        console.warn('⚠️ No fullData found for published book:', zine.id)
       }
+    } else {
+      console.log('📑 Mock/non-published book detected')
     }
     
-    // Default behavior for other zines
+    // Default behavior for other zines (mock data)
+    console.log('🎭 Using mock data for:', zine.title)
     setSelectedZine(zine)
     setViewMode("viewer")
   }
@@ -222,6 +307,23 @@ export default function ZineApp() {
   const handleCreateNew = () => {
     setSelectedWorkData(null) // Clear any existing work data for new creation
     setViewMode("creator")
+  }
+
+  const handleEditWork = (mode: CreatorMode) => {
+    // Edit function for ZineViewer
+    if (viewMode === "viewer" && selectedWorkData) {
+      console.log('📝 Editing ZINE in', mode, 'mode:', selectedWorkData.title)
+      // Set the mode in the data before passing to creator
+      setSelectedWorkData({ ...selectedWorkData, currentMode: mode })
+      setViewMode("creator")
+    } 
+    // Edit function for NovelViewer
+    else if (viewMode === "novel-viewer" && selectedNovel) {
+      console.log('📝 Editing Novel in', mode, 'mode:', selectedNovel.title)
+      // Set the mode in the data before passing to creator
+      setSelectedWorkData({ ...selectedNovel, currentMode: mode })
+      setViewMode("creator")
+    }
   }
 
   // Refresh published books after completion
@@ -353,13 +455,13 @@ export default function ZineApp() {
         )}
 
         {viewMode === "viewer" && selectedZine && (
-          <ZineViewer key="viewer" zine={selectedZine} onBack={handleBackToGallery} />
+          <ZineViewer key="viewer" zine={selectedZine} zineData={selectedWorkData} onBack={handleBackToGallery} onEdit={handleEditWork} />
         )}
 
         {viewMode === "creator" && <ZineCreator key="creator" onBack={handleBackToGallery} initialData={selectedWorkData} onPublishedBooksUpdate={refreshPublishedBooks} />}
 
         {viewMode === "novel-viewer" && selectedNovel && (
-          <NovelViewer key="novel-viewer" novelData={selectedNovel} onClose={handleBackToGallery} />
+          <NovelViewer key="novel-viewer" novelData={selectedNovel} onClose={handleBackToGallery} onEdit={handleEditWork} />
         )}
       </AnimatePresence>
     </div>

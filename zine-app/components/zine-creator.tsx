@@ -1342,6 +1342,45 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
 
   const hasZineContent = pages.some((page) => page.elements.length > 0) || zineTitle.trim() !== ""
 
+  // ZINEコンテンツ抽出関数（小説化用）
+  const extractZineContent = (): string => {
+    let content = ""
+    
+    // ZINEタイトルがある場合は含める
+    if (zineTitle.trim()) {
+      content += `タイトル: ${zineTitle}\n\n`
+    }
+    
+    // 全ページの要素を抽出
+    pages.forEach((page, pageIndex) => {
+      if (page.elements.length > 0) {
+        content += `[ページ ${pageIndex + 1}]\n`
+        
+        // テキスト要素を抽出
+        const textElements = page.elements.filter(el => el.type === "text")
+        if (textElements.length > 0) {
+          textElements.forEach(el => {
+            if (el.content && el.content.trim() && el.content !== "クリックして編集") {
+              content += `${el.content}\n`
+            }
+          })
+        }
+        
+        // 画像要素を抽出（視覚的説明として）
+        const imageElements = page.elements.filter(el => el.type === "image")
+        if (imageElements.length > 0) {
+          imageElements.forEach((el, index) => {
+            content += `[画像${index + 1}: 視覚的要素として参考にしてください]\n`
+          })
+        }
+        
+        content += "\n"
+      }
+    })
+    
+    return content.trim()
+  }
+
   // 視覚的要約生成関数（表紙生成用）
   const extractVisualSummary = (novelText: string): string => {
     // 小説から視覚的要素のみを抽出し、文字要素を完全に除去
@@ -1387,9 +1426,24 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
 
   // 小説化機能
   const handleNovelize = async () => {
+    // ZINEの実際のコンテンツを抽出
+    const zineContent = extractZineContent()
+    
     const concept = `${conceptConfig.length === "short" ? "短編" : "長編"} ${conceptConfig.genre === "sf" ? "SF" : "ラブコメ"} ${conceptConfig.keywords}`
     const world = `キャラクター名: ${worldviewConfig.characterName}, 性格: ${worldviewConfig.personality}, シナリオ: ${worldviewConfig.scenario}`
-    const prompt = "上記の設定に基づいて魅力的な小説を書いてください。応答には小説の本文のみを含め、タイトル、設定説明、概要、メタデータなどは一切含めないでください。物語の開始から終了まで、読み応えのある完全な小説として仕上げてください。"
+    
+    // ZINEの内容を含めたプロンプトを作成
+    let prompt = "以下のZINEコンテンツを基に魅力的な小説を書いてください。\n\n"
+    
+    // ZINEにコンテンツがある場合はそれを優先的に使用
+    if (zineContent && zineContent.trim()) {
+      prompt += `=== ZINEコンテンツ ===\n${zineContent}\n\n`
+      prompt += "上記のZINEコンテンツに含まれるテキストや画像の情報を活用し、それらを物語の要素として組み込んだ小説を作成してください。"
+    } else {
+      prompt += "設定情報を基に小説を作成してください。"
+    }
+    
+    prompt += "\n\n応答には小説の本文のみを含め、タイトル、設定説明、概要、メタデータなどは一切含めないでください。物語の開始から終了まで、読み応えのある完全な小説として仕上げてください。"
     
     setIsGeneratingNovel(true) // Start loading
     try {
@@ -1612,7 +1666,7 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
                             type: "shape",
                             x: 850,
                             y: 200,
-                            width: 420,
+                            width: 500,
                             height: 400,
                             color: "#ffffff",
                             pageId: currentPage.id
@@ -1623,10 +1677,10 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
                             type: "text",
                             x: 880,
                             y: 250,
-                            width: 250,
+                            width: 350,
                             height: 60,
                             content: "MYJOURNEY",
-                            fontSize: 36,
+                            fontSize: 30,
                             color: "#2d1810",
                             pageId: currentPage.id
                           },
