@@ -41,7 +41,12 @@ export async function generateCover(payload: {
   synopsis: string;
   title?: string;
 }): Promise<{ url: string; message?: string }> {
-  return apiCall("/cover", payload);
+  // タイトル情報を除外し、視覚的要約のみでビジュアル専用の表紙を生成
+  const cleanPayload = {
+    synopsis: payload.synopsis,
+    instruction: "【重要】文字・文章・テキストが一切入らない純粋にビジュアルのみの表紙画像を生成してください。 CRITICAL: Generate a COMPLETELY TEXT-FREE book cover image. ABSOLUTELY FORBIDDEN: 1) 文字・タイトル・テキスト・数字・記号・ロゴ・サインの一切を禁止 (NO text, titles, letters, words, numbers, symbols, logos, signs) 2) 本の背表紙・ラベル・タグ・看板等の文字的要素を禁止 3) 読み取り可能な要素・言語的要素を禁止。 REQUIRED: 1) 純粋な視覚要素のみ：風景・自然・色彩・光・影・雰囲気 2) 絵画的・芸術的なアプローチ：画家が言葉を使わずに表現するような画像 3) 感情的な色調・設定・ムードを視覚のみで表現 4) 抽象的パターン・自然の情景・建物・人影などの純粋な画像要素のみ。Generate like a wordless painting that captures the essence through colors, lighting, landscapes, and visual mood only."
+  };
+  return apiCall("/cover", cleanPayload);
 }
 
 // 埋め込み機能（将来拡張用）

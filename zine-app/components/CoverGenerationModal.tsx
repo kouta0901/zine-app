@@ -318,20 +318,19 @@ export function CoverGenerationModal({
                 }}
               >
                 <Sparkles className="w-4 h-4 mr-2" />
-                再生成
+                再作成
               </Button>
               {onComplete && (
                 <Button
                   onClick={() => {
                     onComplete()
-                    onClose()
                   }}
                   className="text-white font-bold"
                   style={{
                     background: "linear-gradient(135deg, #22c55e 0%, #16a34a 50%, #15803d 100%)"
                   }}
                 >
-                  🎉 完成
+                  ✅ 完了
                 </Button>
               )}
             </>

@@ -1,7 +1,7 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef } from "react"
 import {
   ArrowLeft,
   ImageIcon,
@@ -33,7 +33,7 @@ import { ZineMenuPanel } from "./ZineMenuPanel"
 import { CoverGenerationModal } from "./CoverGenerationModal"
 import { ZineCreatorProps, Element, Page, ChatMessage, TextSelection, ReviewSuggestion, CreatorMode, MenuSection } from "@/types/zine"
 
-export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: ZineCreatorProps) {
+export function ZineCreator({ onBack }: ZineCreatorProps) {
   const [mode, setMode] = useState<"zine" | "novel">("zine")
   const [zineTitle, setZineTitle] = useState("")
   const [currentPageIndex, setCurrentPageIndex] = useState(0)
@@ -1340,71 +1340,92 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
     scenario: ""
   })
 
-  // Initialize component state when initialData is provided
-  useEffect(() => {
-    if (initialData) {
-      console.log('Initializing ZineCreator with data:', initialData)
-      
-      // Set basic ZINE information
-      if (initialData.title) {
-        setZineTitle(initialData.title)
-      }
-      
-      // Set pages data
-      if (initialData.pages && initialData.pages.length > 0) {
-        setPages(initialData.pages)
-      }
-      
-      // Set concept configuration
-      if (initialData.conceptConfig) {
-        setConceptConfig(initialData.conceptConfig)
-      }
-      
-      // Set worldview configuration
-      if (initialData.worldviewConfig) {
-        setWorldviewConfig(initialData.worldviewConfig)
-      }
-      
-      // Set novel content and automatically switch to novel mode if content exists
-      if (initialData.novelContent) {
-        setNovelContent(initialData.novelContent)
-        // 🔄 小説コンテンツがある場合は自動的に小説モードに切り替え
-        setMode("novel")
-        console.log('Switching to novel mode due to existing novel content')
-      } else if (initialData.currentMode) {
-        // 🔄 保存されたモードがある場合はそれを復元
-        setMode(initialData.currentMode)
-        console.log(`Restoring saved mode: ${initialData.currentMode}`)
-      }
-      
-      // Set novel pages
-      if (initialData.novelPages && initialData.novelPages.length > 0) {
-        setNovelPages(initialData.novelPages)
-      }
-      
-      // Set cover image
-      if (initialData.coverImageUrl) {
-        setCoverImageUrl(initialData.coverImageUrl)
-      }
-      
-      console.log('ZineCreator initialization completed')
-    }
-  }, [initialData])
-
   const hasZineContent = pages.some((page) => page.elements.length > 0) || zineTitle.trim() !== ""
+
+  // 視覚的要約生成関数（表紙生成用）
+  const extractVisualSummary = (novelText: string): string => {
+    // 小説から視覚的要素のみを抽出し、文字要素を完全に除去
+    const lines = novelText.split('\n').filter(line => line.trim() !== '')
+    
+    // 視覚的描写を含む文を抽出
+    const visualKeywords = [
+      '景色', '風景', '色', '光', '影', '空', '雲', '山', '海', '川', '森', '街',
+      '建物', '部屋', '窓', '道', '橋', '花', '木', '草', '動物', '人影', '夕日',
+      '朝日', '月', '星', '雨', '雪', '風', '霧', '夜', '昼', '季節', '自然'
+    ]
+    
+    const visualDescriptions = lines
+      .filter(line => {
+        // タイトル行や設定行を除外
+        if (line.match(/^(タイトル|概要|設定|ジャンル|キャラクター|登場人物|あらすじ|シナリオ)[:：]/)) {
+          return false
+        }
+        // 会話文を除外
+        if (line.includes('「') || line.includes('』') || line.includes('"')) {
+          return false
+        }
+        // 視覚的キーワードを含む文のみ抽出
+        return visualKeywords.some(keyword => line.includes(keyword))
+      })
+      .slice(0, 3) // 最大3文まで
+      .map(line => {
+        // 固有名詞や人名を汎用的な表現に置換
+        return line
+          .replace(/[「」『』"'"]/g, '') // 引用符除去
+          .replace(/[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]+さん|[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]+君|[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]+ちゃん/g, '人物') // 人名を汎用化
+          .replace(/[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]{2,}学校|[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]{2,}大学/g, '学校') // 学校名を汎用化
+          .replace(/[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]{2,}市|[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]{2,}町/g, '街') // 地名を汎用化
+      })
+    
+    // 基本的な情景描写がない場合のフォールバック
+    if (visualDescriptions.length === 0) {
+      return "静かな日常の風景。自然光が差し込む穏やかな空間。季節を感じる色合いの景色。"
+    }
+    
+    return visualDescriptions.join('。') + '。'
+  }
 
   // 小説化機能
   const handleNovelize = async () => {
     const concept = `${conceptConfig.length === "short" ? "短編" : "長編"} ${conceptConfig.genre === "sf" ? "SF" : "ラブコメ"} ${conceptConfig.keywords}`
     const world = `キャラクター名: ${worldviewConfig.characterName}, 性格: ${worldviewConfig.personality}, シナリオ: ${worldviewConfig.scenario}`
-    const prompt = "上記の設定に基づいて魅力的な小説を書いてください。"
+    const prompt = "上記の設定に基づいて魅力的な小説を書いてください。応答には小説の本文のみを含め、タイトル、設定説明、概要、メタデータなどは一切含めないでください。物語の開始から終了まで、読み応えのある完全な小説として仕上げてください。"
     
     setIsGeneratingNovel(true) // Start loading
     try {
       const result = await novelize({ concept, world, prompt })
-      setNovelContent(result.text)
+      
+      // 小説内容をクリーンアップ（設定情報やメタデータを除去）
+      let cleanedText = result.text
+      
+      // タイトル行や設定説明を除去
+      const linesToRemove = [
+        /^タイトル[:：].*$/gm,
+        /^概要[:：].*$/gm,
+        /^設定[:：].*$/gm,
+        /^ジャンル[:：].*$/gm,
+        /^キャラクター[:：].*$/gm,
+        /^登場人物[:：].*$/gm,
+        /^あらすじ[:：].*$/gm,
+        /^シナリオ[:：].*$/gm,
+        /^[【］[\w\s]*[】]/gm, // 【タイトル】のような記述
+        /^##?\s.*$/gm, // マークダウンのヘッダー
+        /^-{3,}$/gm, // 区切り線
+        /^={3,}$/gm, // 区切り線
+      ]
+      
+      linesToRemove.forEach(pattern => {
+        cleanedText = cleanedText.replace(pattern, '')
+      })
+      
+      // 空行を整理（連続する空行を1つにまとめる）
+      cleanedText = cleanedText
+        .replace(/\n\s*\n\s*\n/g, '\n\n')
+        .trim()
+      
+      setNovelContent(cleanedText)
       // テキストを複数ページに分割
-      const splitPages = splitNovelContent(result.text)
+      const splitPages = splitNovelContent(cleanedText)
       setNovelPages(splitPages)
       setCurrentNovelPage(1) // 最初のページに戻る
       setMode("novel")
@@ -1434,8 +1455,6 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
         worldviewConfig: worldviewConfig,
         novelContent: novelContent,
         novelPages: novelPages,
-        coverImageUrl: coverImageUrl,
-        currentMode: mode, // 🔄 現在のモードも保存
         createdAt: new Date().toISOString()
       }
 
@@ -1457,24 +1476,17 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
 
     setIsGeneratingCover(true)
     try {
-      console.log("表紙生成開始 - 小説内容:", novelContent.substring(0, 100) + "...")
+      // 小説から視覚的要素のみを抽出して要約を作成
+      const visualSummary = extractVisualSummary(novelContent)
+      console.log("表紙生成用の視覚的要約:", visualSummary)
       
       const result = await generateCover({
-        synopsis: novelContent
+        synopsis: visualSummary // 小説全文ではなく視覚的要約のみを送信
       })
       
-      console.log("API レスポンス詳細:", result)
-      console.log("画像URL:", result.url)
-      console.log("URL型:", typeof result.url)
-      console.log("URL長さ:", result.url ? result.url.length : 0)
-      
       if (result.url) {
-        const cleanUrl = result.url.trim()
-        console.log("クリーンアップ後URL:", cleanUrl)
-        setCoverImageUrl(cleanUrl)
-        console.log("coverImageUrl状態更新完了:", cleanUrl)
+        setCoverImageUrl(result.url)
       } else {
-        console.error("画像URLが空:", result)
         alert(result.message || "表紙画像の生成に失敗しました。")
       }
     } catch (error) {
@@ -1491,47 +1503,6 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
       return
     }
     setShowCoverModal(true)
-  }
-
-  const handleCompleteBook = async () => {
-    if (!novelContent.trim() || !coverImageUrl) {
-      alert("小説の内容と表紙画像が必要です。")
-      return
-    }
-
-    try {
-      // My Booksデータの構造に合わせて保存
-      const bookData = {
-        title: zineTitle || "無題の小説",
-        status: "published", // My Booksでは公開済みとして扱う
-        description: `${novelPages.length}ページの小説`,
-        pages: pages,
-        conceptConfig: conceptConfig,
-        worldviewConfig: worldviewConfig,
-        novelContent: novelContent,
-        novelPages: novelPages,
-        coverImageUrl: coverImageUrl,
-        currentMode: mode,
-        createdAt: new Date().toISOString(),
-        category: "Fiction", // My Books用のカテゴリ
-        author: "You", // 固定値
-        publishedDate: new Date().toISOString()
-      }
-
-      const result = await saveZine(bookData)
-      alert(`🎉 作品が My Books に登録されました！\n「${bookData.title}」として公開されています。`)
-      
-      // Refresh published books list
-      if (onPublishedBooksUpdate) {
-        await onPublishedBooksUpdate()
-      }
-      
-      // 成功したらホームに戻る
-      onBack()
-    } catch (error) {
-      console.error("My Books登録エラー:", error)
-      alert("My Booksへの登録に失敗しました。もう一度お試しください。")
-    }
   }
 
   return (
@@ -1602,96 +1573,176 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
                         background: "linear-gradient(135deg, #8b6914 0%, #a0751f 100%)"
                       }}
                       onClick={() => {
-                        // Apply enhanced photo essay template with more elements
-                        const elements: Element[] = [
-                          // Main photo on left page
+                        // フォトエッセイテンプレートを2ページに適用
+                        const currentIndex = pages.findIndex(p => p.id === currentPage.id)
+                        
+                        // 現在のページとその次のページを確認
+                        if (currentIndex === -1) return
+                        
+                        // 次のページがなければ作成
+                        let nextPageId: string
+                        if (!pages[currentIndex + 1]) {
+                          nextPageId = `page-${Date.now()}`
+                          const newPage: Page = {
+                            id: nextPageId,
+                            elements: [],
+                            title: `ページ ${pages.length + 1}`
+                          }
+                          setPages(prev => [...prev, newPage])
+                        } else {
+                          nextPageId = pages[currentIndex + 1].id
+                        }
+
+                        // ページ1のテンプレート（MY JOURNEY）
+                        const page1Elements: Element[] = [
+                          // 左ページ（0-680px）：メイン写真
                           {
-                            id: `photo-main-${Date.now()}`,
+                            id: `main-photo-${Date.now()}`,
                             type: "image",
-                            x: 20,
-                            y: 50,
-                            width: 340,
-                            height: 250,
+                            x: 100,
+                            y: 150,
+                            width: 460,
+                            height: 550,
                             src: "https://images.unsplash.com/photo-1519904981063-b0cf448d479e?w=800&h=600&fit=crop&crop=entropy&auto=format&fm=jpg&q=60",
                             pageId: currentPage.id
                           },
-                          // Title text overlay
+                          // 右ページ（720-1400px）：白い背景ボックス
+                          {
+                            id: `white-bg-${Date.now()}`,
+                            type: "shape",
+                            x: 850,
+                            y: 200,
+                            width: 420,
+                            height: 400,
+                            color: "#ffffff",
+                            pageId: currentPage.id
+                          },
+                          // 右ページ：タイトル（MY JOURNEY）
                           {
                             id: `title-${Date.now()}`,
                             type: "text",
-                            x: 40,
-                            y: 320,
-                            width: 300,
+                            x: 880,
+                            y: 250,
+                            width: 250,
                             height: 60,
-                            content: "街角の記憶",
-                            fontSize: 28,
+                            content: "MYJOURNEY",
+                            fontSize: 36,
                             color: "#2d1810",
                             pageId: currentPage.id
                           },
-                          // Decorative shape behind title
+                          // 右ページ：メインテキスト
                           {
-                            id: `title-bg-${Date.now()}`,
-                            type: "shape",
-                            x: 35,
-                            y: 315,
-                            width: 310,
-                            height: 70,
-                            color: "rgba(241, 229, 199, 0.8)",
-                            pageId: currentPage.id
-                          },
-                          // Main story text on right page
-                          {
-                            id: `story-main-${Date.now()}`,
+                            id: `main-text-${Date.now()}`,
                             type: "text",
-                            x: 420,
-                            y: 80,
-                            width: 320,
-                            height: 200,
-                            content: "その角で、私は初めて彼女と出会った。\n\n夕暮れのオレンジ色の光が建物の窓を染め、遠くから聞こえる車の音が都市の鼓動のように響いている。\n\n角の向こうから現れた猫が、彼女の足元で鳴いた。まるで何かを伝えようとするように。",
-                            fontSize: 14,
+                            x: 880,
+                            y: 350,
+                            width: 360,
+                            height: 160,
+                            content: "旅の始まりは偶然だった。ある朝、目が覚めると、どこか遠くへ行きたくなった。理由は分からない。ただ、心がそう告げていた。",
+                            fontSize: 16,
                             color: "#4a3c28",
                             pageId: currentPage.id
                           },
-                          // Small accent photo
+                          // 右ページ：日付
                           {
-                            id: `photo-accent-${Date.now()}`,
-                            type: "image",
-                            x: 450,
-                            y: 300,
-                            width: 120,
-                            height: 80,
-                            src: "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=400&h=300&fit=crop&crop=entropy&auto=format&fm=jpg&q=60",
-                            pageId: currentPage.id
-                          },
-                          // Quote text
-                          {
-                            id: `quote-${Date.now()}`,
+                            id: `date-${Date.now()}`,
                             type: "text",
-                            x: 580,
-                            y: 320,
-                            width: 150,
-                            height: 60,
-                            content: "\"時を刻んでいたのは\n装飾された記憶\"",
-                            fontSize: 12,
+                            x: 890,
+                            y: 540,
+                            width: 120,
+                            height: 30,
+                            content: "2024.10.09",
+                            fontSize: 14,
                             color: "#8b7355",
-                            pageId: currentPage.id
-                          },
-                          // Decorative line
-                          {
-                            id: `line-${Date.now()}`,
-                            type: "shape",
-                            x: 420,
-                            y: 290,
-                            width: 320,
-                            height: 2,
-                            color: "#d4b893",
                             pageId: currentPage.id
                           }
                         ]
+
+                        // ページ2のテンプレート
+                        const page2Elements: Element[] = [
+                          // 左ページ（0-680px）：白い背景ボックス
+                          {
+                            id: `left-white-bg-${Date.now()}`,
+                            type: "shape",
+                            x: 80,
+                            y: 150,
+                            width: 520,
+                            height: 550,
+                            color: "#ffffff",
+                            pageId: nextPageId
+                          },
+                          // 左ページ：テキストボックス
+                          {
+                            id: `left-text-${Date.now()}`,
+                            type: "text",
+                            x: 110,
+                            y: 180,
+                            width: 460,
+                            height: 250,
+                            content: "カメラを手に取り、最小限の荷物をバックに詰めて、私は家を出た。行き先は決めていない。それでも、きっと何か大切なものに出会えると信じて、初めて訪れた街の空気、初めて見る景色。全てが新鮮で、全てが美しかった。",
+                            fontSize: 16,
+                            color: "#4a3c28",
+                            pageId: nextPageId
+                          },
+                          // 左ページ：小さな写真
+                          {
+                            id: `small-photo-${Date.now()}`,
+                            type: "image",
+                            x: 160,
+                            y: 480,
+                            width: 220,
+                            height: 160,
+                            src: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=300&fit=crop&crop=entropy&auto=format&fm=jpg&q=60",
+                            pageId: nextPageId
+                          },
+                          // 右ページ（720-1400px）：地図/旅の道具の写真
+                          {
+                            id: `map-photo-${Date.now()}`,
+                            type: "image",
+                            x: 850,
+                            y: 150,
+                            width: 420,
+                            height: 300,
+                            src: "https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=600&h=400&fit=crop&crop=entropy&auto=format&fm=jpg&q=60",
+                            pageId: nextPageId
+                          },
+                          // 右ページ：白い背景ボックス（キャプション用）
+                          {
+                            id: `caption-bg-${Date.now()}`,
+                            type: "shape",
+                            x: 850,
+                            y: 480,
+                            width: 420,
+                            height: 150,
+                            color: "#ffffff",
+                            pageId: nextPageId
+                          },
+                          // 右ページ：キャプション
+                          {
+                            id: `caption-${Date.now()}`,
+                            type: "text",
+                            x: 880,
+                            y: 510,
+                            width: 360,
+                            height: 90,
+                            content: "山の頂きから見下ろした景色は、想像を超えていた。風が頬を撫で、雲が足元に流れる。この瞬間のために、旅をしてきたのかもしれない。",
+                            fontSize: 15,
+                            color: "#6b5b47",
+                            pageId: nextPageId
+                          }
+                        ]
+
+                        // ページを更新
                         setPages(prev => {
                           const updated = [...prev]
-                          // Add all elements to the current page
-                          updated[currentPageIndex].elements.push(...elements)
+                          // 現在のページをクリアして新しい要素を追加
+                          updated[currentIndex].elements = page1Elements
+                          
+                          // 次のページがある場合はその要素を更新
+                          if (updated[currentIndex + 1]) {
+                            updated[currentIndex + 1].elements = page2Elements
+                          }
+                          
                           return updated
                         })
                         setShowZineExamples(false)
@@ -2318,7 +2369,10 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
         isGenerating={isGeneratingCover}
         coverImageUrl={coverImageUrl}
         onGenerate={handleCoverGeneration}
-        onComplete={handleCompleteBook}
+        onComplete={() => {
+          setShowCoverModal(false)
+          onBack() // ホーム画面に戻る
+        }}
         novelTitle={zineTitle || "あなたの小説"}
       />
     </div>
