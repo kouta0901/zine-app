@@ -1,7 +1,7 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import {
   ArrowLeft,
   ImageIcon,
@@ -25,7 +25,7 @@ import {
   Plus,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { novelize, novelizeWithImages, novelizeWithImagesEnhanced, saveZine, review, generateCover } from "@/lib/api"
+import { novelizeWithImagesEnhanced, saveZine, review, generateCover } from "@/lib/api"
 import { ocrService } from "@/lib/ocr"
 import { imageCaptioningService } from "@/lib/captioning"
 import SpatialAnalysisService from "@/lib/spatial-analysis"
@@ -103,6 +103,26 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
   const currentPage = pages[currentPageIndex]
 
   const isCoverPage = false
+
+  // Migration: Fix existing elements without pageId
+  useEffect(() => {
+    let needsMigration = false
+    const migratedPages = pages.map(page => {
+      const migratedElements = page.elements.map(element => {
+        if (!element.pageId) {
+          needsMigration = true
+          return { ...element, pageId: page.id }
+        }
+        return element
+      })
+      return { ...page, elements: migratedElements }
+    })
+    
+    if (needsMigration) {
+      console.log('🔄 Migrating existing elements to add pageId')
+      setPages(migratedPages)
+    }
+  }, [pages.length]) // Only run when pages array length changes to avoid infinite loops
 
   const zineMenuSections = [
     { id: "concept" as MenuSection, label: "コンセプト", icon: Target },
@@ -1956,54 +1976,8 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
       const { images, title, descriptions, enhancedData } = await extractZineImages()
       
       if (images.length === 0) {
-        // 画像がない場合は従来のテキストベースの処理にフォールバック
-        console.log("⚠️ No images found, falling back to text-based generation")
-        const zineContent = extractZineContent()
-        
-        let prompt = ""
-        if (zineContent && zineContent.trim()) {
-          prompt += "以下の設定とZINEコンテンツを基に小説を作成してください。\n\n"
-          prompt += `${zineContent}\n\n`
-        } else {
-          prompt += "以下の設定情報を基に小説を作成してください。\n\n"
-        }
-        
-        prompt += "【形式の注意】\n"
-        prompt += "- 小説の本文のみを出力してください\n"
-        prompt += "- タイトル、設定説明、概要、メタデータなどは含めないでください\n"
-        prompt += "- 物語の開始から終了まで、完全な小説として仕上げてください\n"
-        
-        const result = await novelize({ concept, world, prompt })
-        let cleanedText = result.text
-        
-        // クリーンアップ処理
-        const linesToRemove = [
-          /^タイトル[:：].*$/gm,
-          /^概要[:：].*$/gm,
-          /^設定[:：].*$/gm,
-          /^ジャンル[:：].*$/gm,
-          /^キャラクター[:：].*$/gm,
-          /^登場人物[:：].*$/gm,
-          /^あらすじ[:：].*$/gm,
-          /^シナリオ[:：].*$/gm,
-          /^[【］[\w\s]*[】]/gm,
-          /^##?\s.*$/gm,
-          /^-{3,}$/gm,
-          /^={3,}$/gm,
-        ]
-        
-        linesToRemove.forEach(pattern => {
-          cleanedText = cleanedText.replace(pattern, '')
-        })
-        
-        cleanedText = cleanedText.replace(/\n\s*\n\s*\n/g, '\n\n').trim()
-        
-        setNovelContent(cleanedText)
-        const splitPages = splitNovelContent(cleanedText)
-        setNovelPages(splitPages)
-        setCurrentNovelPage(1)
-        setMode("novel")
-        
+        alert("小説化にはZINEページに画像またはテキスト要素が必要です。ページに要素を追加してください。")
+        return
       } else {
         // 強化版画像ベースの小説生成
         console.log(`🖼️ Generating enhanced novel from ${images.length} ZINE images...`)
@@ -2083,62 +2057,7 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
       
     } catch (error) {
       console.error("❌ Image-based novel generation error:", error)
-      
-      // API失敗時のフォールバック処理
-      console.log("🔄 Attempting fallback to text-based generation...")
-      
-      try {
-        const zineContent = extractZineContent()
-        
-        let prompt = ""
-        if (zineContent && zineContent.trim()) {
-          prompt += "以下の設定とZINEコンテンツを基に小説を作成してください。\n\n"
-          prompt += `${zineContent}\n\n`
-        } else {
-          prompt += "以下の設定情報を基に小説を作成してください。\n\n"
-        }
-        
-        prompt += "【形式の注意】\n"
-        prompt += "- 小説の本文のみを出力してください\n"
-        prompt += "- タイトル、設定説明、概要、メタデータなどは含めないでください\n"
-        prompt += "- 物語の開始から終了まで、完全な小説として仕上げてください\n"
-        
-        const result = await novelize({ concept, world, prompt })
-        let cleanedText = result.text
-        
-        // クリーンアップ処理
-        const linesToRemove = [
-          /^タイトル[:：].*$/gm,
-          /^概要[:：].*$/gm,
-          /^設定[:：].*$/gm,
-          /^ジャンル[:：].*$/gm,
-          /^キャラクター[:：].*$/gm,
-          /^登場人物[:：].*$/gm,
-          /^あらすじ[:：].*$/gm,
-          /^シナリオ[:：].*$/gm,
-          /^[【］[\w\s]*[】]/gm,
-          /^##?\s.*$/gm,
-          /^-{3,}$/gm,
-          /^={3,}$/gm,
-        ]
-        
-        linesToRemove.forEach(pattern => {
-          cleanedText = cleanedText.replace(pattern, '')
-        })
-        
-        cleanedText = cleanedText.replace(/\n\s*\n\s*\n/g, '\n\n').trim()
-        
-        console.log("✅ Fallback text-based novel generation completed")
-        setNovelContent(cleanedText)
-        const splitPages = splitNovelContent(cleanedText)
-        setNovelPages(splitPages)
-        setCurrentNovelPage(1)
-        setMode("novel")
-        
-      } catch (fallbackError) {
-        console.error("❌ Fallback generation also failed:", fallbackError)
-        alert(`画像ベース小説生成が失敗したため、テキストベース生成にフォールバックしましたが、それも失敗しました: ${fallbackError instanceof Error ? fallbackError.message : '不明なエラー'}`)
-      }
+      alert("画像ベース小説生成に失敗しました。ページ内容や画像サイズを確認して再試行してください。")
     } finally {
       setIsGeneratingNovel(false)
     }
@@ -2189,9 +2108,10 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
       const visualSummary = extractVisualSummary(novelContent)
       console.log("✨ ULTRA_ENHANCED visual summary:", visualSummary)
       
-      // 📡 Send to enhanced generateCover API with ultra-strict prompt
+      // 📡 Send to enhanced generateCover API with ultra-strict prompt (no title)
       const result = await generateCover({
         synopsis: visualSummary // Ultra-processed, text-free visual summary
+        // Deliberately not passing title to prevent any title text from appearing
       })
       
       console.log("📨 Cover generation result:", result)

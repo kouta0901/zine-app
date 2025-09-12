@@ -242,7 +242,7 @@ export const ZineCanvas = forwardRef<ZineCanvasHandle, ZineCanvasProps>(({
   const handleMouseMove = (e: React.MouseEvent) => {
     // Handle element resizing first (highest priority)
     if (resizingElement && canvasRef.current) {
-      const element = currentPage.elements.find(el => el.id === resizingElement)
+      const element = currentPage.elements.find(el => el.id === resizingElement && el.pageId === currentPage.id)
       if (element) {
         const scaleFactor = canvasSize.width / 1400
         const deltaX = (e.clientX - initialResize.mouseX) / (zoom * scaleFactor)
@@ -309,7 +309,7 @@ export const ZineCanvas = forwardRef<ZineCanvasHandle, ZineCanvasProps>(({
       const scaledY = (e.clientY - canvasRect.top) / (zoom * scaleFactor) - dragOffset.y
       
       // Constrain to canvas bounds
-      const element = currentPage.elements.find(el => el.id === draggedElement)
+      const element = currentPage.elements.find(el => el.id === draggedElement && el.pageId === currentPage.id)
       if (element) {
         const maxX = 1400 - element.width
         const maxY = 900 - element.height
@@ -619,7 +619,7 @@ export const ZineCanvas = forwardRef<ZineCanvasHandle, ZineCanvasProps>(({
               onClick={handleCanvasClick}
             >
               {/* Render page elements */}
-              {currentPage.elements.map((element) => {
+              {currentPage.elements.filter(element => element.pageId === currentPage.id).map((element) => {
                 const scaleFactor = canvasSize.width / 1400
                 const isInCenterBinding = crossesPageBoundary(element.x, element.width)
                 
@@ -883,7 +883,7 @@ export const ZineCanvas = forwardRef<ZineCanvasHandle, ZineCanvasProps>(({
               })}
 
               {/* Empty state with modern design */}
-              {currentPage.elements.length === 0 && (
+              {currentPage.elements.filter(element => element.pageId === currentPage.id).length === 0 && (
                 <div className="absolute inset-0 flex">
                   <div 
                     className="flex items-center justify-center"

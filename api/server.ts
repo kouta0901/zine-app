@@ -13,7 +13,9 @@ const app = express();
 
 // Middleware
 app.use(cors());
-app.use(bodyParser.json());
+// Increase request body size limits to handle base64 images from client
+app.use(bodyParser.json({ limit: "10mb" }));
+app.use(bodyParser.urlencoded({ limit: "10mb", extended: true }));
 
 // Initialize Vertex AI
 const project = process.env.GOOGLE_CLOUD_PROJECT || "vital-analogy-470911-t0";
@@ -763,47 +765,50 @@ app.post("/cover", async (req, res) => {
       return res.status(400).json({ error: "synopsis is required" });
     }
 
-    const bookTitle = title || "小説タイトル"; // デフォルトタイトル設定
-
     console.log("Cover generation requested for synopsis:", synopsis.substring(0, 200) + "...");
     
-    // Create a detailed prompt for book cover generation with Japanese text support
-    const coverPrompt = `日本語小説「${bookTitle}」の美しい表紙画像を生成してください。以下のあらすじに基づいて、プロフェッショナルで芸術的な書籍表紙デザインを作成してください：
+    // Create a pure abstract art prompt for wordless book cover generation
+    const coverPrompt = `Create a stunning abstract book cover artwork based on the following visual and emotional essence. Generate a completely wordless, text-free artistic composition that captures the story's atmosphere through pure visual elements:
 
-【小説タイトル】${bookTitle}
-
-【あらすじ】
+【Visual and Emotional Essence】
 ${synopsis}
 
-## 必須要件：
-- プロフェッショナルな書籍表紙デザイン（縦向き、横より縦が長い）
-- 小説の雰囲気とテーマを表現
-- アニメ・マンガ風イラストスタイルの美しい背景とビジュアル要素
-- 印刷に適した高品質なアートワーク
-- ドラマチックな照明と雰囲気効果を含む
-- 物語の雰囲気に合った色彩使用
+## CRITICAL REQUIREMENTS - ABSOLUTELY NO TEXT:
+- NEVER include any text, words, letters, titles, or readable symbols
+- NEVER display "振動タイル", "新道タイル", "小説タイトル", "ZINE", or any title text
+- Create pure abstract visual art without any textual elements
+- Focus solely on colors, shapes, lighting, and atmospheric effects
 
-## 文字・テキスト要件：
-- タイトル「${bookTitle}」を表紙上部に日本語で明確に表示
-- 日本語文字は正確で読みやすく、文字化けを避ける
-- 文字は鮮明で読みやすく、背景と調和する配置
-- タイトル文字には適切なコントラストと視認性を確保
-- フォント：明朝体、ゴシック体、または美しい書体を使用
-- 文字色は背景に対して十分なコントラストを持つ
+## Artistic Direction:
+- Professional book cover composition (vertical orientation, portrait format)
+- Express the story's mood and themes through pure visual metaphors
+- Beautiful abstract background with organic and atmospheric elements
+- High-quality artwork suitable for print publication
+- Dramatic lighting and atmospheric effects
+- Color palette that reflects the narrative's emotional tone
 
-## デザイン指針：
-- 日本の小説表紙として適切なレイアウト
-- 表紙として魅力的で手に取りたくなるデザイン
-- 物語の世界観を一目で伝える構成
-- プロの出版社レベルの仕上がり
-- タイトルが主要な視覚要素として目立つ配置
+## Visual Elements to Include:
+- Flowing organic shapes and natural forms
+- Atmospheric lighting effects (golden hour, moonlight, dramatic shadows)
+- Emotional color temperature variations (warm/cool contrasts)
+- Textural elements (brush strokes, gradients, soft transitions)
+- Architectural silhouettes without any signage or text
+- Distant organic shapes suggesting life and movement
+- Impressionistic landscapes with dreamy qualities
 
-## 技術的要求：
-- 高解像度（最低300dpi相当）
-- 縦横比：3:4または2:3（書籍表紙に適した比率）
-- 色彩豊富で印刷に適したカラープロファイル
+## Design Style:
+- Modern and sophisticated abstract art approach
+- Visually compelling composition that attracts readers
+- Commercial-grade quality suitable for professional publishing
+- Professional abstract artist level execution
+- Pure visual communication without relying on text
 
-Please create a professional Japanese novel cover with the title "${bookTitle}" clearly displayed in readable Japanese characters, avoiding any text corruption or garbled characters.`;
+## Technical Requirements:
+- High resolution (minimum 300dpi equivalent)
+- Aspect ratio: 3:4 or 2:3 (suitable for book cover proportions)
+- Rich color palette suitable for print production
+
+ABSOLUTE PROHIBITION: Do NOT include any text, letters, words, titles, character names, place names, or readable symbols of any kind. Create a purely visual, wordless artistic composition.`;
 
     try {
       // Try direct HTTP API call to Vertex AI first (working method)
@@ -827,11 +832,11 @@ Please create a professional Japanese novel cover with the title "${bookTitle}" 
           contents: [{
             role: "user",
             parts: [{
-              text: `Generate a professional book cover image. ${coverPrompt}`
+              text: coverPrompt
             }]
           }],
           generation_config: {
-            response_modalities: ["TEXT", "IMAGE"]
+            response_modalities: ["IMAGE"]
           }
         };
         

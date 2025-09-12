@@ -19,14 +19,14 @@ async function apiCall(endpoint: string, payload: any) {
   return response.json();
 }
 
-// 小説化機能
-export async function novelize(payload: {
-  concept: string;
-  world: string;
-  prompt: string;
-}): Promise<{ text: string }> {
-  return apiCall("/novelize", payload);
-}
+// 小説化機能（テキストのみ）は廃止（画像ベースAPIに一本化）
+// export async function novelize(payload: {
+//   concept: string;
+//   world: string;
+//   prompt: string;
+// }): Promise<{ text: string }> {
+//   return apiCall("/novelize", payload);
+// }
 
 // 画像ベースの小説化機能
 export async function novelizeWithImages(payload: {
@@ -343,7 +343,7 @@ function extractEnhancedVisualSummary(novelText: string): string {
   // 💎 Extract Visual & Emotional Lines with ULTRA Filtering
   const meaningfulLines = lines.filter(line => {
     // ❌ ULTRA STRICT EXCLUSIONS - もう一度確認
-    if (line.match(/^(タイトル|概要|設定|ジャンル|キャラクター|登場人物|あらすじ|シナリオ|Chapter|第.章|Scene|場面|新道|タイル)[:：]/i)) {
+    if (line.match(/^(タイトル|概要|設定|ジャンル|キャラクター|登場人物|あらすじ|シナリオ|Chapter|第.章|Scene|場面|新道|タイル|振動)[:：]/i)) {
       return false;
     }
     
@@ -358,7 +358,8 @@ function extractEnhancedVisualSummary(novelText: string): string {
     }
     
     // ❌ Skip any line containing potential title words
-    if (line.includes('新道') || line.includes('タイル') || line.includes('ZINE')) {
+    if (line.includes('新道') || line.includes('タイル') || line.includes('ZINE') || 
+        line.includes('振動タイル') || line.includes('振動') || line.includes('小説タイトル')) {
       return false;
     }
     
