@@ -1465,11 +1465,12 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
     values: "",
     rules: ""
   })
-  const [worldviewConfig, setWorldviewConfig] = useState({
-    image: "",
-    characterName: "",
-    personality: "",
-    scenario: ""
+  const [worldviewConfig, setWorldviewConfig] = useState<any>({
+    stage: "",
+    scenario: "",
+    characters: [
+      { name: "", personality: "" }
+    ]
   })
 
   const hasZineContent = pages.some((page) => page.elements.length > 0) || zineTitle.trim() !== ""
@@ -1561,8 +1562,9 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
     // ZINEの実際のコンテンツを抽出
     const zineContent = extractZineContent()
     
-    const concept = `${conceptConfig.length === "short" ? "短編" : "長編"} ${conceptConfig.genre === "sf" ? "SF" : "ラブコメ"} ${conceptConfig.keywords}`
-    const world = `キャラクター名: ${worldviewConfig.characterName}, 性格: ${worldviewConfig.personality}, シナリオ: ${worldviewConfig.scenario}`
+    const concept = `${conceptConfig.genre} ${conceptConfig.keywords}`
+    const characters = (worldviewConfig.characters || []).map((c: any, idx: number) => `人物${idx + 1}: ${c.name}（性格: ${c.personality}）`).join(" / ")
+    const world = `舞台: ${worldviewConfig.stage}\n${characters}\nシナリオ: ${worldviewConfig.scenario}`
     
     // ZINEの内容を含めたプロンプトを作成
     let prompt = "以下のZINEコンテンツを基に魅力的な小説を書いてください。\n\n"

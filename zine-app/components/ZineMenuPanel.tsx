@@ -331,7 +331,7 @@ export function ZineMenuPanel({
               background: "rgba(241, 229, 199, 0.6)",
               borderColor: "rgba(139, 115, 85, 0.3)"
             }}>
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between mb-0">
                 <h3 className="font-semibold" style={{ color: "#4a3c28" }}>ZINEの例</h3>
                 <Button
                   variant="ghost"
@@ -343,40 +343,6 @@ export function ZineMenuPanel({
                   <Eye className="w-4 h-4 mr-1" />
                   詳しく見る
                 </Button>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="p-2 rounded border text-xs text-center" style={{
-                  background: "rgba(255, 253, 250, 0.8)",
-                  borderColor: "rgba(139, 115, 85, 0.3)",
-                  color: "#4a3c28"
-                }}>
-                  <div className="bg-blue-500/30 h-8 mb-1 rounded"></div>
-                  フォトエッセイ
-                </div>
-                <div className="p-2 rounded border text-xs text-center" style={{
-                  background: "rgba(255, 253, 250, 0.8)",
-                  borderColor: "rgba(139, 115, 85, 0.3)",
-                  color: "#4a3c28"
-                }}>
-                  <div className="bg-green-500/30 h-8 mb-1 rounded"></div>
-                  アートブック
-                </div>
-                <div className="p-2 rounded border text-xs text-center" style={{
-                  background: "rgba(255, 253, 250, 0.8)",
-                  borderColor: "rgba(139, 115, 85, 0.3)",
-                  color: "#4a3c28"
-                }}>
-                  <div className="bg-pink-500/30 h-8 mb-1 rounded"></div>
-                  詩集
-                </div>
-                <div className="p-2 rounded border text-xs text-center" style={{
-                  background: "rgba(255, 253, 250, 0.8)",
-                  borderColor: "rgba(139, 115, 85, 0.3)",
-                  color: "#4a3c28"
-                }}>
-                  <div className="bg-purple-500/30 h-8 mb-1 rounded"></div>
-                  イラスト集
-                </div>
               </div>
             </div>
           )}
@@ -402,17 +368,14 @@ export function ZineMenuPanel({
                     {section.id === 'concept' && (
                       <div className="space-y-3">
                         <div>
-                          <div className="text-xs mb-1" style={{ color: '#8b7355' }}>短編 / 長編</div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <Button size="sm" variant={conceptConfig.length === 'short' ? 'default' : 'outline'} onClick={() => setConceptConfig({ ...conceptConfig, length: 'short' })}>短編</Button>
-                            <Button size="sm" variant={conceptConfig.length === 'long' ? 'default' : 'outline'} onClick={() => setConceptConfig({ ...conceptConfig, length: 'long' })}>長編</Button>
-                          </div>
-                        </div>
-                        <div>
                           <div className="text-xs mb-1" style={{ color: '#8b7355' }}>ジャンル</div>
                           <div className="grid grid-cols-2 gap-2">
+                            <Button size="sm" variant={conceptConfig.genre === 'mystery' ? 'default' : 'outline'} onClick={() => setConceptConfig({ ...conceptConfig, genre: 'mystery' })}>ミステリー</Button>
+                            <Button size="sm" variant={conceptConfig.genre === 'fantasy' ? 'default' : 'outline'} onClick={() => setConceptConfig({ ...conceptConfig, genre: 'fantasy' })}>ファンタジー</Button>
+                            <Button size="sm" variant={conceptConfig.genre === 'horror' ? 'default' : 'outline'} onClick={() => setConceptConfig({ ...conceptConfig, genre: 'horror' })}>ホラー</Button>
+                            <Button size="sm" variant={conceptConfig.genre === 'history' ? 'default' : 'outline'} onClick={() => setConceptConfig({ ...conceptConfig, genre: 'history' })}>歴史</Button>
                             <Button size="sm" variant={conceptConfig.genre === 'sf' ? 'default' : 'outline'} onClick={() => setConceptConfig({ ...conceptConfig, genre: 'sf' })}>SF</Button>
-                            <Button size="sm" variant={conceptConfig.genre === 'romance' ? 'default' : 'outline'} onClick={() => setConceptConfig({ ...conceptConfig, genre: 'romance' })}>ラブコメ</Button>
+                            <Button size="sm" variant={conceptConfig.genre === 'romance' ? 'default' : 'outline'} onClick={() => setConceptConfig({ ...conceptConfig, genre: 'romance' })}>恋愛小説</Button>
                           </div>
                         </div>
                         <div>
@@ -425,23 +388,47 @@ export function ZineMenuPanel({
                       <div className="space-y-3">
                         <div>
                           <div className="text-xs mb-1" style={{ color: '#8b7355' }}>AI作家の性格・価値観</div>
-                          <Input value={aiWriterConfig.values} onChange={(e) => setAiWriterConfig({ ...aiWriterConfig, values: (e.target as HTMLInputElement).value })} placeholder="性格・価値観…" />
+                          <Input value={aiWriterConfig.values} onChange={(e) => setAiWriterConfig({ ...aiWriterConfig, values: (e.target as HTMLInputElement).value })} placeholder="性格・価値観入力" />
                         </div>
                         <div>
-                          <div className="text-xs mb-1" style={{ color: '#8b7355' }}>作成時の注意点</div>
-                          <Input value={aiWriterConfig.rules} onChange={(e) => setAiWriterConfig({ ...aiWriterConfig, rules: (e.target as HTMLInputElement).value })} placeholder="作成時の注意点…" />
+                          <div className="text-xs mb-1" style={{ color: '#8b7355' }}>本作成時の注意点</div>
+                          <Input value={aiWriterConfig.rules} onChange={(e) => setAiWriterConfig({ ...aiWriterConfig, rules: (e.target as HTMLInputElement).value })} placeholder="注意点を入力" />
                         </div>
                       </div>
                     )}
                     {section.id === 'worldview' && (
                       <div className="space-y-3">
                         <div>
-                          <div className="text-xs mb-1" style={{ color: '#8b7355' }}>人物名前</div>
-                          <Input value={worldviewConfig.characterName} onChange={(e) => setWorldviewConfig({ ...worldviewConfig, characterName: (e.target as HTMLInputElement).value })} placeholder="主要人物の名前…" />
+                          <div className="text-xs mb-1" style={{ color: '#8b7355' }}>舞台設定</div>
+                          <Input value={worldviewConfig.stage} onChange={(e) => setWorldviewConfig({ ...worldviewConfig, stage: (e.target as HTMLInputElement).value })} placeholder="舞台（都市/時代/環境など）…" />
                         </div>
-                        <div>
-                          <div className="text-xs mb-1" style={{ color: '#8b7355' }}>性格</div>
-                          <Input value={worldviewConfig.personality} onChange={(e) => setWorldviewConfig({ ...worldviewConfig, personality: (e.target as HTMLInputElement).value })} placeholder="性格…" />
+                        {/* 登場人物（配列） */}
+                        <div className="space-y-2">
+                          <div className="text-xs" style={{ color: '#8b7355' }}>登場人物</div>
+                          {(worldviewConfig.characters || []).map((ch: any, idx: number) => (
+                            <div key={idx} className="grid grid-cols-5 gap-2 items-center">
+                              <Input className="col-span-2" value={ch.name} onChange={(e) => {
+                                const next = [...worldviewConfig.characters]
+                                next[idx] = { ...next[idx], name: (e.target as HTMLInputElement).value }
+                                setWorldviewConfig({ ...worldviewConfig, characters: next })
+                              }} placeholder={`人物${idx + 1}の名前`} />
+                              <Input className="col-span-2" value={ch.personality} onChange={(e) => {
+                                const next = [...worldviewConfig.characters]
+                                next[idx] = { ...next[idx], personality: (e.target as HTMLInputElement).value }
+                                setWorldviewConfig({ ...worldviewConfig, characters: next })
+                              }} placeholder="性格" />
+                              <Button size="sm" variant="outline" onClick={() => {
+                                const next = [...worldviewConfig.characters]
+                                next.splice(idx, 1)
+                                setWorldviewConfig({ ...worldviewConfig, characters: next })
+                              }}>削除</Button>
+                            </div>
+                          ))}
+                          <Button size="sm" variant="outline" onClick={() => {
+                            const next = [...(worldviewConfig.characters || [])]
+                            next.push({ name: "", personality: "" })
+                            setWorldviewConfig({ ...worldviewConfig, characters: next })
+                          }}>＋ 登場人物を追加</Button>
                         </div>
                         <div>
                           <div className="text-xs mb-1" style={{ color: '#8b7355' }}>シナリオ</div>
