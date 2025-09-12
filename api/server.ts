@@ -826,7 +826,7 @@ ABSOLUTE PROHIBITION: Do NOT include any text, letters, words, titles, character
         }
         
         // Make direct HTTP request to Vertex AI API
-        const apiUrl = `https://aiplatform.googleapis.com/v1/projects/${project}/locations/global/publishers/google/models/gemini-2.5-flash-image-preview:generateContent`;
+        const apiUrl = `https://aiplatform.googleapis.com/v1/projects/${project}/locations/global/publishers/google/models/gemini-2.5-flash-image:generateContent`;
         
         const requestBody = {
           contents: [{
@@ -834,10 +834,7 @@ ABSOLUTE PROHIBITION: Do NOT include any text, letters, words, titles, character
             parts: [{
               text: coverPrompt
             }]
-          }],
-          generation_config: {
-            response_modalities: ["IMAGE"]
-          }
+          }]
         };
         
         console.log("Making direct API call to:", apiUrl);
