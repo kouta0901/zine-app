@@ -5,6 +5,7 @@ import { VertexAI } from "@google-cloud/vertexai";
 import { Storage } from "@google-cloud/storage";
 import { GoogleAuth } from "google-auth-library";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { DocumentProcessorServiceClient } from "@google-cloud/documentai";
 import https from "https";
 import { URL } from "url";
 
@@ -42,10 +43,180 @@ const storage = new Storage();
 const bucketName = process.env.COVER_BUCKET || "vital-analogy-470911-t0-covers";
 const zinesBucketName = process.env.ZINES_BUCKET || "vital-analogy-470911-t0-zines";
 
+// Initialize Document AI for OCR processing
+const documentAI = new DocumentProcessorServiceClient();
+const docAILocation = process.env.DOC_AI_LOCATION || "us"; 
+const processorId = process.env.DOC_OCR_PROCESSOR_ID;
+let processorName: string | null = null;
+
+if (project && processorId) {
+  processorName = documentAI.processorPath(project, docAILocation, processorId);
+  console.log("📄 Document AI OCR initialized:", processorName);
+} else {
+  console.warn("⚠️ Document AI environment variables not configured. OCR will be disabled.");
+}
+
 // Health check endpoint
 app.get("/healthz", (_, res) => {
   res.json({ ok: true, timestamp: new Date().toISOString() });
 });
+
+// 🔍 SERVER-SIDE OCR PROCESSING
+interface OCRResult {
+  text: string;
+  confidence: number;
+  words: Array<{
+    text: string;
+    confidence: number;
+    boundingBox: { x: number; y: number; width: number; height: number };
+  }>;
+}
+
+async function processOCROnServer(base64Image: string): Promise<OCRResult> {
+  if (!processorName) {
+    console.log("🔧 OCR: Document AI not configured, returning empty result");
+    return { text: "", confidence: 0, words: [] };
+  }
+
+  try {
+    const [result] = await documentAI.processDocument({
+      name: processorName,
+      rawDocument: {
+        content: base64Image,
+        mimeType: "image/png",
+      },
+    });
+
+    const document = result.document;
+    if (!document) {
+      return { text: "", confidence: 0, words: [] };
+    }
+
+    const extractedText = document.text || "";
+    let avgConfidence = 0;
+    const words: any[] = [];
+
+    // Extract words with confidence scores
+    if (document.pages) {
+      let totalConfidence = 0;
+      let tokenCount = 0;
+
+      for (const page of document.pages) {
+        if (page.tokens) {
+          for (const token of page.tokens) {
+            if (token.layout && token.layout.textAnchor && token.layout.boundingPoly) {
+              const textSegment = token.layout.textAnchor.textSegments?.[0];
+              if (textSegment && document.text) {
+                const startIndex = parseInt(textSegment.startIndex?.toString() || '0') || 0;
+                const endIndex = parseInt(textSegment.endIndex?.toString() || startIndex.toString()) || startIndex;
+                const text = document.text.substring(startIndex, endIndex);
+                const confidence = token.layout.confidence || 0;
+
+                words.push({
+                  text,
+                  confidence,
+                  boundingBox: extractBoundingBox(token.layout.boundingPoly)
+                });
+
+                totalConfidence += confidence;
+                tokenCount++;
+              }
+            }
+          }
+        }
+      }
+
+      avgConfidence = tokenCount > 0 ? totalConfidence / tokenCount : 0;
+    }
+
+    console.log(`📄 OCR processed: ${extractedText.length} chars, confidence: ${avgConfidence.toFixed(2)}`);
+    return { text: extractedText, confidence: avgConfidence, words };
+
+  } catch (error) {
+    console.error("❌ OCR processing failed:", error);
+    return { text: "", confidence: 0, words: [] };
+  }
+}
+
+function extractBoundingBox(boundingPoly: any): { x: number; y: number; width: number; height: number } {
+  if (!boundingPoly || !boundingPoly.vertices || boundingPoly.vertices.length === 0) {
+    return { x: 0, y: 0, width: 0, height: 0 };
+  }
+
+  const vertices = boundingPoly.vertices;
+  const xs = vertices.map((v: any) => parseFloat(v.x) || 0);
+  const ys = vertices.map((v: any) => parseFloat(v.y) || 0);
+  
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  
+  return {
+    x: minX,
+    y: minY,
+    width: maxX - minX,
+    height: maxY - minY
+  };
+}
+
+// 🎨 SERVER-SIDE CAPTIONING PROCESSING
+async function processCaptioningOnServer(base64Image: string, pageIndex: number): Promise<string> {
+  try {
+    const model = vertexAI.getGenerativeModel({
+      model: "gemini-2.5-flash",
+      generationConfig: {
+        maxOutputTokens: 1024,
+        temperature: 0.7
+      }
+    });
+
+    const prompt = `この画像を詳細に分析してください。以下の観点から日本語で説明してください：
+
+🎨 視覚的要素:
+- 人物の外見、表情、姿勢
+- 物体、道具、アイテム
+- 背景、環境、建築物
+- 色彩、光、影の効果
+
+📖 物語的要素:
+- 感情的な雰囲気
+- アクション、動き
+- 関係性、相互作用
+- 時間、場所の手がかり
+
+🔍 テキスト要素:
+- 看板、ラベル、文字
+- 記号、マーク
+- 読み取れるすべてのテキスト
+
+簡潔で物語に役立つ分析をお願いします。`;
+
+    const imagePart = {
+      inline_data: {
+        mime_type: "image/png",
+        data: base64Image.replace(/^data:image\/[a-z]+;base64,/, '')
+      }
+    } as any;
+
+    const result = await model.generateContent({
+      contents: [{
+        role: "user",
+        parts: [{ text: prompt }, imagePart]
+      }]
+    });
+
+    const response = result.response;
+    const caption = response.candidates?.[0]?.content?.parts?.[0]?.text || `ページ${pageIndex + 1}の画像内容の詳細な分析情報`;
+
+    console.log(`🎨 Caption generated for page ${pageIndex + 1}: ${caption.substring(0, 100)}...`);
+    return caption;
+
+  } catch (error) {
+    console.error("❌ Captioning failed:", error);
+    return `ページ${pageIndex + 1}には印象的な要素が描かれており、物語の重要な場面を表現している。`;
+  }
+}
 
 // 1. 小説化エンドポイント
 app.post("/novelize", async (req, res) => {
@@ -154,6 +325,232 @@ app.post("/novelize", async (req, res) => {
   } catch (error) {
     console.error("Novelize error:", error);
     res.status(500).json({ error: "Failed to generate novel content" });
+  }
+});
+
+// 1.5. 画像ベース小説化エンドポイント
+app.post("/novelize-with-images", async (req, res) => {
+  try {
+    const { 
+      concept, 
+      world, 
+      images, 
+      title,
+      imageDescriptions,
+      detailedPrompt,
+      enhancedAnalysis,
+      system_prompt,
+      user_prompt,
+      image_analysis_instructions
+    } = req.body;
+    
+    if (!concept || !world || !images) {
+      return res.status(400).json({ error: "concept, world, and images are required" });
+    }
+
+    console.log("🚀 Server-side image processing requested for concept:", concept);
+    console.log("📸 Images count:", images?.length || 0);
+    console.log("🔄 Processing images server-side to avoid client mocks...");
+    
+    // 🔥 SERVER-SIDE PROCESSING: Process raw images to get high-quality analysis
+    const serverAnalysisData = [];
+    
+    if (images && images.length > 0) {
+      console.log("📄 Starting server-side OCR and captioning processing...");
+      
+      for (let i = 0; i < images.length; i++) {
+        const imageBase64 = images[i];
+        console.log(`Processing page ${i + 1}/${images.length}...`);
+        
+        // Process OCR and captioning in parallel for each image
+        const [ocrResult, caption] = await Promise.all([
+          processOCROnServer(imageBase64),
+          processCaptioningOnServer(imageBase64, i)
+        ]);
+        
+        serverAnalysisData.push({
+          pageIndex: i,
+          ocrText: ocrResult.text,
+          caption: caption,
+          confidence: ocrResult.confidence,
+          wordCount: ocrResult.words.length,
+          processedOnServer: true // Mark as server-processed for quality assurance
+        });
+        
+        console.log(`✅ Page ${i + 1} processed: ${ocrResult.text.length} OCR chars, ${caption.length} caption chars`);
+      }
+    } else {
+      console.log("⚠️ No images provided for server-side processing");
+    }
+    
+    // Build comprehensive prompt with SERVER-PROCESSED analysis data
+    let enhancedPrompt = `次の設定に基づいて、提供された画像とサーバ側で高精度解析した内容を完全に反映した日本語の小説本文を生成してください。
+
+【基本設定】
+- コンセプト: ${concept}
+- 世界観: ${world}
+- タイトル: ${title || ''}
+
+【画像ベース小説化・厳格要件（サーバ側高精度処理版）】
+- 各画像のDocument AI OCR抽出テキストをセリフ・ラベル・説明として必ず本文に組み込む
+- Gemini 2.5 Flash生成キャプションの視覚的詳細を情景描写として活用
+- 全てのテキスト要素（看板、ラベル、文字など）を物語に反映
+- 画像の感情トーンと雰囲気を文体や展開に織り込む`;
+
+    if (detailedPrompt) {
+      enhancedPrompt += `\n\n【詳細指示】\n${detailedPrompt}`;
+    }
+
+    // Add SERVER-PROCESSED analysis data (high quality)
+    if (serverAnalysisData.length > 0) {
+      enhancedPrompt += `\n\n【サーバ側高精度解析データ】`;
+      serverAnalysisData.forEach((data, index) => {
+        enhancedPrompt += `\n[Page ${index + 1}] (サーバ処理済み・高品質)
+OCRテキスト: ${data.ocrText || '(テキスト要素なし)'}
+AIキャプション: ${data.caption || '(分析なし)'}
+信頼度: ${(data.confidence * 100).toFixed(1)}%
+抽出単語数: ${data.wordCount}`;
+      });
+    }
+    
+    // Add fallback for client-processed data (if server processing failed)
+    if (enhancedAnalysis && enhancedAnalysis.length > 0 && serverAnalysisData.length === 0) {
+      console.log("⚠️ Falling back to client-processed data (server processing failed)");
+      enhancedPrompt += `\n\n【クライアント側解析データ（フォールバック）】`;
+      enhancedAnalysis.forEach((data: any, index: number) => {
+        enhancedPrompt += `\n[Page ${index + 1}] (クライアント処理)
+OCRテキスト: ${data.ocrText || '(なし)'}
+AIキャプション: ${data.caption || '(なし)'}
+関連テキスト: ${data.nearbyText || '(なし)'}
+空間関係: ${data.spatialContext || '(なし)'}
+信頼度: ${(data.confidence * 100).toFixed(1)}%`;
+      });
+    }
+
+    // Add image descriptions if available
+    if (imageDescriptions && imageDescriptions.length > 0) {
+      enhancedPrompt += `\n\n【補助画像説明】\n${imageDescriptions.join('\n')}`;
+    }
+
+    // Add system instructions
+    if (system_prompt) {
+      enhancedPrompt = `${system_prompt}\n\n${enhancedPrompt}`;
+    }
+    
+    if (user_prompt) {
+      enhancedPrompt += `\n\n${user_prompt}`;
+    }
+
+    if (image_analysis_instructions) {
+      enhancedPrompt += `\n\n【画像解析活用指示】\n${image_analysis_instructions}`;
+    }
+
+    enhancedPrompt += `\n\n制約: 
+- 全ての画像内容を物語に反映すること
+- OCRテキストを省略せずに組み込むこと  
+- 空間関係と時系列を論理的に構成すること
+- 体裁を整え、読みやすい小説として完成させること`;
+
+    try {
+      // Direct HTTP API call to Vertex AI (Gemini 2.5 Flash)
+      console.log("Trying direct HTTP API call to Vertex AI (Gemini 2.5 Flash)...");
+      
+      const authClient = await auth.getClient();
+      const tokenResponse = await authClient.getAccessToken();
+      const accessToken = tokenResponse.token;
+      
+      if (!accessToken) {
+        throw new Error("Failed to get access token");
+      }
+      
+      const apiUrl = `https://aiplatform.googleapis.com/v1/projects/${project}/locations/global/publishers/google/models/gemini-2.5-flash:generateContent`;
+      
+      // Build contents array with images and text
+      const contents = [{
+        role: "user",
+        parts: [{ text: enhancedPrompt }]
+      }];
+
+      // Add images to contents if provided
+      if (images && images.length > 0) {
+        images.forEach((imageBase64: string, index: number) => {
+          if (imageBase64 && imageBase64.length > 0) {
+            contents[0].parts.push({
+              inline_data: {
+                mime_type: "image/png",
+                data: imageBase64.replace(/^data:image\/[a-z]+;base64,/, '') // Clean base64 data
+              }
+            } as any);
+          }
+        });
+      }
+
+      const requestBody = {
+        contents
+      };
+      
+      console.log("Making direct API call to:", apiUrl);
+      console.log("Contents parts count:", contents[0].parts.length);
+      
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json; charset=utf-8',
+        },
+        body: JSON.stringify(requestBody),
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Direct API call failed: ${response.status} ${response.statusText}\n${errorText}`);
+      }
+      
+      const apiResult: any = await response.json();
+      console.log("Direct HTTP API response received (Gemini 2.5 Flash)");
+      
+      const text = apiResult.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      
+      if (text) {
+        console.log("Image-based novel generation successful via direct HTTP API");
+        return res.json({ text });
+      }
+      
+    } catch (directApiError) {
+      console.error("Direct HTTP API call failed:", directApiError);
+    }
+
+    // Fallback: Try Google Generative AI (if API key is available)
+    if (process.env.GOOGLE_API_KEY) {
+      console.log("Trying Google Generative AI as fallback...");
+      
+      try {
+        const directModel = genAI.getGenerativeModel({ 
+          model: "gemini-1.5-pro"
+        });
+        
+        // Build content array for Google AI
+        const contentParts = [enhancedPrompt];
+        
+        const result = await directModel.generateContent(contentParts);
+        const response = await result.response;
+        const text = response.text();
+        
+        if (text) {
+          console.log("Image-based novel generation successful via Google Generative AI");
+          return res.json({ text });
+        }
+        
+      } catch (genAiError) {
+        console.error("Google Generative AI fallback failed:", genAiError);
+      }
+    }
+    
+    throw new Error("All image-based novel generation methods failed");
+    
+  } catch (error) {
+    console.error("Novelize-with-images error:", error);
+    res.status(500).json({ error: "Failed to generate image-based novel content" });
   }
 });
 

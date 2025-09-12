@@ -25,10 +25,13 @@ import {
   Plus,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { novelize, saveZine, review, generateCover } from "@/lib/api"
+import { novelize, novelizeWithImages, novelizeWithImagesEnhanced, saveZine, review, generateCover } from "@/lib/api"
+import { ocrService } from "@/lib/ocr"
+import { imageCaptioningService } from "@/lib/captioning"
+import SpatialAnalysisService from "@/lib/spatial-analysis"
 import { LoadingScreens } from "./LoadingScreens"
 import { ZineToolbar } from "./ZineToolbar"
-import { ZineCanvas } from "./ZineCanvas"
+import { ZineCanvas, ZineCanvasHandle } from "./ZineCanvas"
 import { ZineMenuPanel } from "./ZineMenuPanel"
 import { CoverGenerationModal } from "./CoverGenerationModal"
 import { SuggestionBubble } from "./SuggestionBubble"
@@ -45,10 +48,12 @@ interface TextSuggestion {
 }
 
 export function ZineCreator({ onBack }: ZineCreatorProps) {
+  const canvasRef = useRef<ZineCanvasHandle>(null)
   const [mode, setMode] = useState<"zine" | "novel">("zine")
   const [zineTitle, setZineTitle] = useState("")
   const [currentPageIndex, setCurrentPageIndex] = useState(0)
   const [selectedElement, setSelectedElement] = useState<string | null>(null)
+  const [editingElement, setEditingElement] = useState<string | null>(null)
   const [activeMenuSection, setActiveMenuSection] = useState<string | null>(null)
   const [activeNovelSection, setActiveNovelSection] = useState<string | null>(null)
   const [showNovelizeButton, setShowNovelizeButton] = useState(false) // Track if novelize button should be shown
@@ -301,7 +306,7 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
       y: y ?? 100,
       width: 200,
       height: 50,
-      content: "クリックして編集",
+      content: "テキストを入力",
       fontSize: 16,
       color: "#000000",
       pageId: currentPage.id,
@@ -312,6 +317,13 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
     )
     setPages(updatedPages)
     setSelectedElement(newElement.id)
+    
+    // Auto-start editing mode for new text elements
+    setTimeout(() => {
+      if (canvasRef.current) {
+        canvasRef.current.startEditingElement(newElement.id)
+      }
+    }, 100)
   }
 
   const addImageElement = (x?: number, y?: number) => {
@@ -385,6 +397,11 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
 
   // Delete key handler
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // 編集中は要素削除を行わない
+    if (editingElement) {
+      return
+    }
+    
     if ((e.key === 'Delete' || e.key === 'Backspace') && selectedElement) {
       e.preventDefault()
       deleteElement(selectedElement)
@@ -1474,38 +1491,284 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
   })
 
   const hasZineContent = pages.some((page) => page.elements.length > 0) || zineTitle.trim() !== ""
+  
+  // 新しい直接キャプチャ方式のZINEページ画像化関数
+  const captureCurrentZinePage = async (): Promise<string> => {
+    console.log('🎯 Capturing current ZINE page with direct DOM approach...')
+    
+    if (!canvasRef.current) {
+      throw new Error('ZineCanvas参照が利用できません')
+    }
+    
+    try {
+      const base64Image = await canvasRef.current.captureAsImage()
+      console.log('✅ Successfully captured current ZINE page')
+      return base64Image
+    } catch (error) {
+      console.error('❌ Direct capture failed:', error)
+      throw new Error(`現在のページのキャプチャに失敗しました: ${error instanceof Error ? error.message : '不明なエラー'}`)
+    }
+  }
+  
+  // ページの詳細説明を生成する関数
+  const generatePageDescription = (page: Page, pageNumber: number): string => {
+    const descriptions: string[] = []
+    descriptions.push(`Page ${pageNumber}:`)
+    
+    // テキスト要素の説明
+    const textElements = page.elements.filter(el => el.type === 'text')
+    if (textElements.length > 0) {
+      descriptions.push(`Text content: ${textElements.map(el => el.content).join(', ')}`)
+    }
+    
+    // 画像要素の説明
+    const imageElements = page.elements.filter(el => el.type === 'image')
+    if (imageElements.length > 0) {
+      imageElements.forEach((img, idx) => {
+        if (img.altText || img.description) {
+          descriptions.push(`Image ${idx + 1}: ${img.altText || img.description}`)
+        }
+      })
+    }
+    
+    // レイアウト情報
+    descriptions.push(`Layout: ${page.elements.length} elements total`)
+    
+    return descriptions.join(' | ')
+  }
+  
+  // Enhanced ZINE image extraction with OCR, captioning, and spatial analysis
+  const extractZineImages = async (): Promise<{
+    images: string[], 
+    title: string, 
+    descriptions: string[],
+    enhancedData?: Array<{
+      imageBase64: string;
+      ocrText: string;
+      caption: string;
+      nearbyText: string;
+      spatialContext: string;
+      pageIndex: number;
+      confidence: number;
+    }>
+  }> => {
+    const images: string[] = []
+    const descriptions: string[] = []
+    const enhancedData: Array<{
+      imageBase64: string;
+      ocrText: string;
+      caption: string;
+      nearbyText: string;
+      spatialContext: string;
+      pageIndex: number;
+      confidence: number;
+    }> = []
+    
+    try {
+      console.log("🚀 Starting enhanced ZINE image extraction with AI services...")
+      
+      // 現在のページインデックスを保存
+      const originalPageIndex = currentPageIndex
+      
+      // 各ページを順番にキャプチャ
+      for (let i = 0; i < pages.length; i++) {
+        const page = pages[i]
+        if (page.elements.length > 0) {
+          console.log(`📸 Processing page ${i + 1} with enhanced AI analysis...`)
+          
+          // ページを切り替え（現在のページでない場合）
+          if (i !== currentPageIndex) {
+            setCurrentPageIndex(i)
+            // ページ切り替えのレンダリングを待つ
+            await new Promise(resolve => setTimeout(resolve, 200))
+          }
+          
+          // 現在表示されているページをキャプチャ
+          const imageBase64 = await captureCurrentZinePage()
+          images.push(imageBase64)
+          
+          // Extract image elements from the page for spatial analysis
+          const imageElements = page.elements.filter(el => el.type === 'image')
+          const textElements = page.elements.filter(el => el.type === 'text')
+          
+          // Convert elements to rectangles for spatial analysis
+          const rectangles = SpatialAnalysisService.convertZineElementsToRectangles(page.elements)
+          const layout = SpatialAnalysisService.analyzePageLayout(rectangles)
+          
+          // For the main page image, perform comprehensive analysis
+          try {
+            console.log(`🔍 Running OCR on page ${i + 1}...`)
+            const ocrResult = await ocrService.extractTextFromImage(imageBase64)
+            
+            console.log(`🎨 Generating caption for page ${i + 1}...`)
+            const pageContext = generatePageDescription(page, i + 1)
+            const nearbyTextContent = textElements
+              .filter(el => el.content && el.content.trim() && el.content !== "クリックして編集")
+              .map(el => el.content)
+              .join(' | ')
+            
+            const captionResult = await imageCaptioningService.generateEnhancedCaption(
+              imageBase64,
+              nearbyTextContent,
+              pageContext,
+              i
+            )
+            
+            // Build spatial context from layout analysis
+            let spatialContext = `Page ${i + 1} layout: `
+            if (layout.imageTextPairs.length > 0) {
+              const spatialInfo = layout.imageTextPairs.map(pair => {
+                const relatedTexts = pair.relatedText
+                  .filter(rel => rel.confidence > 0.5)
+                  .map(rel => `${rel.direction}:${rel.element.content?.substring(0, 150) || ''}`)
+                  .join(', ')
+                return `Image with ${pair.relatedText.length} related texts (${relatedTexts})`
+              }).join(' | ')
+              spatialContext += spatialInfo
+            } else {
+              spatialContext += `${imageElements.length} images, ${textElements.length} text elements`
+            }
+            
+            // Create enhanced description combining all analysis
+            const enhancedDescription = [
+              `Page ${i + 1}:`,
+              `OCR: "${ocrResult.text.substring(0, 100)}${ocrResult.text.length > 100 ? '...' : ''}"`,
+              `Caption: "${captionResult.caption.substring(0, 150)}${captionResult.caption.length > 150 ? '...' : ''}"`,
+              `Spatial: ${spatialContext}`,
+              `Elements: ${page.elements.length} total`
+            ].join(' | ')
+            
+            descriptions.push(enhancedDescription)
+            
+            // Store enhanced data
+            enhancedData.push({
+              imageBase64,
+              ocrText: ocrResult.text,
+              caption: captionResult.caption,
+              nearbyText: nearbyTextContent,
+              spatialContext,
+              pageIndex: i,
+              confidence: (ocrResult.confidence + captionResult.confidence) / 2
+            })
+            
+            console.log(`✅ Enhanced analysis completed for page ${i + 1}`)
+            console.log(`   - OCR extracted: ${ocrResult.text.length} chars`)
+            console.log(`   - Caption generated: ${captionResult.caption.length} chars`)
+            console.log(`   - Spatial relationships: ${layout.imageTextPairs.length} pairs`)
+            
+          } catch (analysisError) {
+            console.warn(`⚠️ Enhanced analysis failed for page ${i + 1}, using fallback:`, analysisError)
+            // Fallback to basic page description
+            const basicDescription = generatePageDescription(page, i + 1)
+            descriptions.push(basicDescription)
+            
+            // Store minimal enhanced data
+            enhancedData.push({
+              imageBase64,
+              ocrText: "",
+              caption: `Page ${i + 1} with ${page.elements.length} elements`,
+              nearbyText: textElements.map(el => el.content).filter(Boolean).join(' '),
+              spatialContext: `Basic layout: ${imageElements.length} images, ${textElements.length} texts`,
+              pageIndex: i,
+              confidence: 0.3
+            })
+          }
+          
+        } else {
+          console.log(`📝 Page ${i + 1} is empty, skipping...`)
+        }
+      }
+      
+      // 元のページインデックスに戻す
+      if (currentPageIndex !== originalPageIndex) {
+        setCurrentPageIndex(originalPageIndex)
+      }
+      
+      console.log(`🎉 Enhanced ZINE extraction completed: ${images.length} pages processed`)
+      
+      return {
+        images,
+        title: zineTitle.trim() || '無題のZINE',
+        descriptions,
+        enhancedData
+      }
+    } catch (error) {
+      console.error('Failed to extract ZINE images with enhanced analysis:', error)
+      throw new Error('ZINEページの高度な画像解析に失敗しました')
+    }
+  }
 
-  // ZINEコンテンツ抽出関数（小説化用）
+  // ZINEコンテンツ抽出関数（小説化用）- 改善版
   const extractZineContent = (): string => {
     let content = ""
     
     // ZINEタイトルがある場合は含める
     if (zineTitle.trim()) {
-      content += `タイトル: ${zineTitle}\n\n`
+      content += `【作品タイトル】\n${zineTitle}\n\n`
     }
     
-    // 全ページの要素を抽出
+    // 全ページの要素を抽出（要素の配置順序を考慮）
     pages.forEach((page, pageIndex) => {
       if (page.elements.length > 0) {
-        content += `[ページ ${pageIndex + 1}]\n`
+        content += `===== ページ ${pageIndex + 1} =====\n\n`
         
-        // テキスト要素を抽出
-        const textElements = page.elements.filter(el => el.type === "text")
-        if (textElements.length > 0) {
-          textElements.forEach(el => {
+        // 要素をY座標でソート（上から下の順序で処理）
+        const sortedElements = [...page.elements].sort((a, b) => {
+          // まずY座標で比較、同じ場合はX座標で比較
+          if (Math.abs(a.y - b.y) < 50) { // 50px以内は同じ行とみなす
+            return a.x - b.x
+          }
+          return a.y - b.y
+        })
+        
+        // ソート済み要素を処理
+        sortedElements.forEach((el) => {
+          if (el.type === "text") {
+            // テキスト要素
             if (el.content && el.content.trim() && el.content !== "クリックして編集") {
-              content += `${el.content}\n`
+              content += `【テキスト】\n${el.content}\n\n`
             }
-          })
-        }
-        
-        // 画像要素を抽出（視覚的説明として）
-        const imageElements = page.elements.filter(el => el.type === "image")
-        if (imageElements.length > 0) {
-          imageElements.forEach((el, index) => {
-            content += `[画像${index + 1}: 視覚的要素として参考にしてください]\n`
-          })
-        }
+          } else if (el.type === "image") {
+            // 画像要素（詳細情報を含む）
+            content += `【画像】\n`
+            
+            // 画像の説明情報があれば追加
+            if (el.description) {
+              content += `説明: ${el.description}\n`
+            } else if (el.altText) {
+              content += `内容: ${el.altText}\n`
+            } else if (el.caption) {
+              content += `キャプション: ${el.caption}\n`
+            } else {
+              // デフォルトの説明（画像URLから推測）
+              if (el.src?.includes('placeholder')) {
+                content += `内容: プレースホルダー画像\n`
+              } else if (el.src) {
+                // URLから画像の種類を推測
+                const imageName = el.src.split('/').pop()?.split('?')[0] || '不明な画像'
+                content += `内容: ${imageName}\n`
+              } else {
+                content += `内容: 視覚的要素（詳細不明）\n`
+              }
+            }
+            
+            // 画像の配置情報（物語の流れのヒントとして）
+            const position = getElementPosition(el)
+            content += `配置: ${position}\n`
+            
+            // 近くのテキストとの関連性を示唆
+            const nearbyText = findNearbyText(el, sortedElements)
+            if (nearbyText) {
+              content += `関連テキスト: "${nearbyText.length > 200 ? nearbyText.substring(0, 200) + '...' : nearbyText}"\n`
+            }
+            
+            content += "\n"
+          } else if (el.type === "shape") {
+            // 図形要素（装飾的な要素として記録）
+            content += `【装飾】\n`
+            content += `種類: 図形（${el.color || '色不明'}）\n\n`
+          }
+        })
         
         content += "\n"
       }
@@ -1513,115 +1776,371 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
     
     return content.trim()
   }
-
-  // 視覚的要約生成関数（表紙生成用）
-  const extractVisualSummary = (novelText: string): string => {
-    // 小説から視覚的要素のみを抽出し、文字要素を完全に除去
-    const lines = novelText.split('\n').filter(line => line.trim() !== '')
+  
+  // 要素の配置位置を文字列で表現
+  const getElementPosition = (el: Element): string => {
+    const relativeY = el.y / 900 // キャンバス高さ900px基準
+    const relativeX = el.x / 1400 // キャンバス幅1400px基準
     
-    // 視覚的描写を含む文を抽出
-    const visualKeywords = [
-      '景色', '風景', '色', '光', '影', '空', '雲', '山', '海', '川', '森', '街',
-      '建物', '部屋', '窓', '道', '橋', '花', '木', '草', '動物', '人影', '夕日',
-      '朝日', '月', '星', '雨', '雪', '風', '霧', '夜', '昼', '季節', '自然'
-    ]
+    let position = ""
+    if (relativeY < 0.33) position += "上部"
+    else if (relativeY < 0.66) position += "中央"
+    else position += "下部"
     
-    const visualDescriptions = lines
-      .filter(line => {
-        // タイトル行や設定行を除外
-        if (line.match(/^(タイトル|概要|設定|ジャンル|キャラクター|登場人物|あらすじ|シナリオ)[:：]/)) {
-          return false
+    if (relativeX < 0.33) position += "左側"
+    else if (relativeX < 0.66) position += "中央"
+    else position += "右側"
+    
+    return position
+  }
+  
+  // 画像の近くにあるテキストを複数検索（強化版）
+  const findNearbyText = (imageEl: Element, elements: Element[]): string => {
+    const textElements = elements.filter(el => 
+      el.type === "text" && 
+      el.content && 
+      el.content.trim() !== "" &&
+      el.content !== "クリックして編集"
+    )
+    
+    // 距離と方向情報を含む関連テキストを収集
+    const relatedTexts: Array<{
+      content: string
+      distance: number
+      direction: string
+    }> = []
+    
+    textElements.forEach(textEl => {
+      const distance = Math.sqrt(
+        Math.pow(imageEl.x - textEl.x, 2) + 
+        Math.pow(imageEl.y - textEl.y, 2)
+      )
+      
+      // 閾値を300pxに拡大（より多くの関連テキストを取得）
+      if (distance < 300) {
+        // 方向を判定
+        const deltaX = textEl.x - imageEl.x
+        const deltaY = textEl.y - imageEl.y
+        let direction = ""
+        
+        if (Math.abs(deltaY) > Math.abs(deltaX)) {
+          direction = deltaY > 0 ? "下" : "上"
+        } else {
+          direction = deltaX > 0 ? "右" : "左"
         }
-        // 会話文を除外
-        if (line.includes('「') || line.includes('』') || line.includes('"')) {
-          return false
-        }
-        // 視覚的キーワードを含む文のみ抽出
-        return visualKeywords.some(keyword => line.includes(keyword))
-      })
-      .slice(0, 3) // 最大3文まで
-      .map(line => {
-        // 固有名詞や人名を汎用的な表現に置換
-        return line
-          .replace(/[「」『』"'"]/g, '') // 引用符除去
-          .replace(/[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]+さん|[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]+君|[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]+ちゃん/g, '人物') // 人名を汎用化
-          .replace(/[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]{2,}学校|[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]{2,}大学/g, '学校') // 学校名を汎用化
-          .replace(/[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]{2,}市|[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]{2,}町/g, '街') // 地名を汎用化
-      })
+        
+        relatedTexts.push({
+          content: textEl.content || "",
+          distance,
+          direction
+        })
+      }
+    })
     
-    // 基本的な情景描写がない場合のフォールバック
-    if (visualDescriptions.length === 0) {
-      return "静かな日常の風景。自然光が差し込む穏やかな空間。季節を感じる色合いの景色。"
+    // 距離順でソート
+    relatedTexts.sort((a, b) => a.distance - b.distance)
+    
+    // 上位3つまでの関連テキストを結合（200文字制限に緩和）
+    const maxTexts = 3
+    const selectedTexts = relatedTexts.slice(0, maxTexts)
+    
+    if (selectedTexts.length === 0) {
+      return ""
     }
     
-    return visualDescriptions.join('。') + '。'
+    // 方向付きで結合
+    return selectedTexts
+      .map(text => `[${text.direction}] ${text.content.substring(0, 200)}`)
+      .join(" | ")
   }
 
-  // 小説化機能
+  // 🎨 ULTRA ENHANCED Visual Summary Generator (NO TEXT VERSION)
+  const extractVisualSummary = (novelText: string): string => {
+    console.log("🎨 Starting ULTRA_ENHANCED visual extraction...")
+    const lines = novelText.split('\n').filter(line => line.trim() !== '')
+    
+    // 🌟 EXPANDED Visual & Emotional Keywords
+    const visualKeywords = [
+      // Nature & Landscape (自然・風景)
+      '景色', '風景', '自然', '空', '雲', '山', '海', '川', '森', '木', '花', '草',
+      '夕日', '朝日', '月', '星', '雨', '雪', '風', '霧', '虹', '湖', '野原', '丘',
+      // Colors & Light (色彩・光)
+      '色', '光', '影', '明るい', '暗い', '赤', '青', '緑', '黄', '紫', '金', '銀',
+      '輝く', '眩しい', '薄暗い', '透明', 'キラキラ', '煌めく', '鮮やか', '淡い',
+      // Architecture & Settings (建築・設定)
+      '街', '建物', '家', '窓', '道', '橋', '駅', '公園', '庭', '部屋', '店', '塔',
+      // Weather & Atmosphere (天候・雰囲気)
+      '晴れ', '曇り', '嵐', '穏やか', '静寂', '賑やか', '涼しい', '暖かい',
+      // Time & Season (時間・季節)
+      '朝', '昼', '夕方', '夜', '春', '夏', '秋', '冬', '季節', '時間'
+    ]
+    
+    const emotionalKeywords = [
+      // Emotional States (感情状態)
+      '平和', '希望', '憂鬱', '喜び', '悲しみ', '緊張', '安らぎ', '興奮', 
+      '恐怖', '愛', '孤独', '温かさ', '清涼感', '重厚感', '軽やか', 
+      '美しい', '幻想的', '神秘的', 'ノスタルジック', 'ロマンチック', '優雅'
+    ]
+    
+    // 💎 Extract Visual & Emotional Lines with Enhanced Filtering
+    const meaningfulLines = lines.filter(line => {
+      // ❌ STRICT EXCLUSIONS - Prevent text elements
+      if (line.match(/^(タイトル|概要|設定|ジャンル|キャラクター|登場人物|あらすじ|シナリオ|Chapter|第.章|Scene|場面)[:：]/i)) {
+        return false
+      }
+      
+      // ❌ Skip dialogue and quotations completely
+      if (line.includes('「') || line.includes('』') || line.includes('"') || line.includes('『') || line.includes('』')) {
+        return false
+      }
+      
+      // ❌ Skip character names and specific references
+      if (line.match(/[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]+さん|[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]+君|[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]+ちゃん/)) {
+        return false
+      }
+      
+      // ✅ Include lines with visual or emotional content
+      return visualKeywords.some(keyword => line.includes(keyword)) ||
+             emotionalKeywords.some(keyword => line.includes(keyword))
+    })
+    
+    // 🎭 Convert to Abstract Artistic Concepts
+    const abstractDescriptions = meaningfulLines
+      .slice(0, 6) // Take more lines for richer description
+      .map(line => {
+        // 🔄 Transform specific content into abstract concepts
+        let abstract = line
+          .replace(/[「」『』"'"]/g, '') // Remove all quotation marks
+          .replace(/[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]+さん|[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]+君|[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]+ちゃん/g, 'silhouette') // Names → silhouettes
+          .replace(/[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]{2,}学校|[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]{2,}大学/g, 'architectural structure') // Schools → architecture
+          .replace(/[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]{2,}市|[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]{2,}町/g, 'urban landscape') // Cities → landscapes
+          .replace(/電話|メール|スマホ|パソコン/g, '') // Remove modern tech references
+        
+        return abstract.trim()
+      })
+      .filter(desc => desc.length > 0)
+    
+    // 🎨 Create Ultra-Abstract Artistic Description
+    if (abstractDescriptions.length === 0) {
+      // 🆘 Fallback: Pure abstract concepts
+      return "Visual essence: Gentle atmospheric composition with soft lighting gradients. Emotional color palette expressing tranquil mood through natural harmony. Abstract interpretation: flowing organic shapes in warm earth tones with ethereal light effects."
+    }
+    
+    const visualEssence = abstractDescriptions.join(' ')
+    
+    // 🌟 Final Abstract Transformation
+    const ultraAbstractDescription = `
+      Visual essence: ${visualEssence}
+      Artistic interpretation: Express this through pure colors, atmospheric lighting, and organic compositions
+      Mood translation: Convert these elements into visual metaphors using color temperature, light/shadow interplay, and abstract forms
+      Style guide: Like a wordless painting that captures emotional resonance through visual harmony alone
+    `.replace(/\s+/g, ' ').trim()
+    
+    console.log("✨ Generated ultra-abstract description:", ultraAbstractDescription)
+    return ultraAbstractDescription
+  }
+
+  // 小説化機能（画像ベース）
   const handleNovelize = async () => {
-    // ZINEの実際のコンテンツを抽出
-    const zineContent = extractZineContent()
+    console.log("🎬 Starting image-based novel generation...")
     
     const concept = `${conceptConfig.genre} ${conceptConfig.keywords}`
     const characters = (worldviewConfig.characters || []).map((c: any, idx: number) => `人物${idx + 1}: ${c.name}（性格: ${c.personality}）`).join(" / ")
     const world = `舞台: ${worldviewConfig.stage}\n${characters}\nシナリオ: ${worldviewConfig.scenario}`
     
-    // ZINEの内容を含めたプロンプトを作成
-    let prompt = "以下のZINEコンテンツを基に魅力的な小説を書いてください。\n\n"
+    setIsGeneratingNovel(true)
     
-    // ZINEにコンテンツがある場合はそれを優先的に使用
-    if (zineContent && zineContent.trim()) {
-      prompt += `=== ZINEコンテンツ ===\n${zineContent}\n\n`
-      prompt += "上記のZINEコンテンツに含まれるテキストや画像の情報を活用し、それらを物語の要素として組み込んだ小説を作成してください。"
-    } else {
-      prompt += "設定情報を基に小説を作成してください。"
-    }
-    
-    prompt += "\n\n応答には小説の本文のみを含め、タイトル、設定説明、概要、メタデータなどは一切含めないでください。物語の開始から終了まで、読み応えのある完全な小説として仕上げてください。"
-    
-    setIsGeneratingNovel(true) // Start loading
     try {
-      const result = await novelize({ concept, world, prompt })
+      // ZINEページを画像化（Enhanced AI Analysis）
+      console.log("📸 Extracting ZINE images with AI enhancement...")
+      const { images, title, descriptions, enhancedData } = await extractZineImages()
       
-      // 小説内容をクリーンアップ（設定情報やメタデータを除去）
-      let cleanedText = result.text
+      if (images.length === 0) {
+        // 画像がない場合は従来のテキストベースの処理にフォールバック
+        console.log("⚠️ No images found, falling back to text-based generation")
+        const zineContent = extractZineContent()
+        
+        let prompt = ""
+        if (zineContent && zineContent.trim()) {
+          prompt += "以下の設定とZINEコンテンツを基に小説を作成してください。\n\n"
+          prompt += `${zineContent}\n\n`
+        } else {
+          prompt += "以下の設定情報を基に小説を作成してください。\n\n"
+        }
+        
+        prompt += "【形式の注意】\n"
+        prompt += "- 小説の本文のみを出力してください\n"
+        prompt += "- タイトル、設定説明、概要、メタデータなどは含めないでください\n"
+        prompt += "- 物語の開始から終了まで、完全な小説として仕上げてください\n"
+        
+        const result = await novelize({ concept, world, prompt })
+        let cleanedText = result.text
+        
+        // クリーンアップ処理
+        const linesToRemove = [
+          /^タイトル[:：].*$/gm,
+          /^概要[:：].*$/gm,
+          /^設定[:：].*$/gm,
+          /^ジャンル[:：].*$/gm,
+          /^キャラクター[:：].*$/gm,
+          /^登場人物[:：].*$/gm,
+          /^あらすじ[:：].*$/gm,
+          /^シナリオ[:：].*$/gm,
+          /^[【］[\w\s]*[】]/gm,
+          /^##?\s.*$/gm,
+          /^-{3,}$/gm,
+          /^={3,}$/gm,
+        ]
+        
+        linesToRemove.forEach(pattern => {
+          cleanedText = cleanedText.replace(pattern, '')
+        })
+        
+        cleanedText = cleanedText.replace(/\n\s*\n\s*\n/g, '\n\n').trim()
+        
+        setNovelContent(cleanedText)
+        const splitPages = splitNovelContent(cleanedText)
+        setNovelPages(splitPages)
+        setCurrentNovelPage(1)
+        setMode("novel")
+        
+      } else {
+        // 強化版画像ベースの小説生成
+        console.log(`🖼️ Generating enhanced novel from ${images.length} ZINE images...`)
+        
+        // Enhanced API call with OCR, captioning, and spatial analysis data
+        const result = await novelizeWithImagesEnhanced({
+          concept,
+          world,
+          images,
+          title,
+          imageDescriptions: descriptions,
+          enhancedAnalysis: enhancedData, // Include enhanced AI analysis data
+          detailedPrompt: `
+            【強化AI解析による高精度小説生成】
+            Document AI OCRとVertex AI Geminiを使用した詳細分析結果を基に、画像の内容を100%反映した小説を生成してください。
+            
+            【解析データの活用指示】
+            1. OCRテキスト: 画像内の文字（タイトル、看板、標識、説明文など）を正確にセリフや描写に組み込む
+            2. AI生成キャプション: 視覚的詳細を物語の情景描写として活用
+            3. 空間解析: 画像とテキストの位置関係から論理的な物語構成を構築
+            4. 感情トーン: 画像から抽出された感情を文体や展開に反映
+            
+            【品質要求】
+            - 画像内の全テキスト要素（看板、ラベル、説明文など）を漏らさず物語に統合
+            - キャラクターの外見、表情、ポーズを具体的に描写
+            - 背景や環境を詳細に設定として活用
+            - 画像順序＝時系列として論理的な展開を構築
+            - 各ページ間の連続性と一貫性を保持
+            - 空間関係に基づく画像とテキストの論理的配置を反映
+            
+            【強化解析結果】
+            ${enhancedData?.map((data, i) => `
+            ページ${i + 1}:
+            - OCR読取: "${data.ocrText.substring(0, 200)}${data.ocrText.length > 200 ? '...' : ''}"
+            - AI描写: "${data.caption.substring(0, 200)}${data.caption.length > 200 ? '...' : ''}"
+            - 周辺文脈: "${data.nearbyText}"
+            - 空間構成: ${data.spatialContext}
+            - 信頼度: ${Math.round(data.confidence * 100)}%
+            `).join('\n') || ''}
+            
+            ページ構成詳細：
+            ${descriptions.join('\n')}
+          `
+        })
+        
+        let cleanedText = result.text
+        
+        // 同じクリーンアップ処理
+        const linesToRemove = [
+          /^タイトル[:：].*$/gm,
+          /^概要[:：].*$/gm,
+          /^設定[:：].*$/gm,
+          /^ジャンル[:：].*$/gm,
+          /^キャラクター[:：].*$/gm,
+          /^登場人物[:：].*$/gm,
+          /^あらすじ[:：].*$/gm,
+          /^シナリオ[:：].*$/gm,
+          /^[【］[\w\s]*[】]/gm,
+          /^##?\s.*$/gm,
+          /^-{3,}$/gm,
+          /^={3,}$/gm,
+        ]
+        
+        linesToRemove.forEach(pattern => {
+          cleanedText = cleanedText.replace(pattern, '')
+        })
+        
+        cleanedText = cleanedText.replace(/\n\s*\n\s*\n/g, '\n\n').trim()
+        
+        console.log("✅ Image-based novel generation completed")
+        setNovelContent(cleanedText)
+        const splitPages = splitNovelContent(cleanedText)
+        setNovelPages(splitPages)
+        setCurrentNovelPage(1)
+        setMode("novel")
+      }
       
-      // タイトル行や設定説明を除去
-      const linesToRemove = [
-        /^タイトル[:：].*$/gm,
-        /^概要[:：].*$/gm,
-        /^設定[:：].*$/gm,
-        /^ジャンル[:：].*$/gm,
-        /^キャラクター[:：].*$/gm,
-        /^登場人物[:：].*$/gm,
-        /^あらすじ[:：].*$/gm,
-        /^シナリオ[:：].*$/gm,
-        /^[【］[\w\s]*[】]/gm, // 【タイトル】のような記述
-        /^##?\s.*$/gm, // マークダウンのヘッダー
-        /^-{3,}$/gm, // 区切り線
-        /^={3,}$/gm, // 区切り線
-      ]
-      
-      linesToRemove.forEach(pattern => {
-        cleanedText = cleanedText.replace(pattern, '')
-      })
-      
-      // 空行を整理（連続する空行を1つにまとめる）
-      cleanedText = cleanedText
-        .replace(/\n\s*\n\s*\n/g, '\n\n')
-        .trim()
-      
-      setNovelContent(cleanedText)
-      // テキストを複数ページに分割
-      const splitPages = splitNovelContent(cleanedText)
-      setNovelPages(splitPages)
-      setCurrentNovelPage(1) // 最初のページに戻る
-      setMode("novel")
     } catch (error) {
-      console.error("小説化エラー:", error)
-      alert("小説の生成に失敗しました。設定を確認してください。")
+      console.error("❌ Image-based novel generation error:", error)
+      
+      // API失敗時のフォールバック処理
+      console.log("🔄 Attempting fallback to text-based generation...")
+      
+      try {
+        const zineContent = extractZineContent()
+        
+        let prompt = ""
+        if (zineContent && zineContent.trim()) {
+          prompt += "以下の設定とZINEコンテンツを基に小説を作成してください。\n\n"
+          prompt += `${zineContent}\n\n`
+        } else {
+          prompt += "以下の設定情報を基に小説を作成してください。\n\n"
+        }
+        
+        prompt += "【形式の注意】\n"
+        prompt += "- 小説の本文のみを出力してください\n"
+        prompt += "- タイトル、設定説明、概要、メタデータなどは含めないでください\n"
+        prompt += "- 物語の開始から終了まで、完全な小説として仕上げてください\n"
+        
+        const result = await novelize({ concept, world, prompt })
+        let cleanedText = result.text
+        
+        // クリーンアップ処理
+        const linesToRemove = [
+          /^タイトル[:：].*$/gm,
+          /^概要[:：].*$/gm,
+          /^設定[:：].*$/gm,
+          /^ジャンル[:：].*$/gm,
+          /^キャラクター[:：].*$/gm,
+          /^登場人物[:：].*$/gm,
+          /^あらすじ[:：].*$/gm,
+          /^シナリオ[:：].*$/gm,
+          /^[【］[\w\s]*[】]/gm,
+          /^##?\s.*$/gm,
+          /^-{3,}$/gm,
+          /^={3,}$/gm,
+        ]
+        
+        linesToRemove.forEach(pattern => {
+          cleanedText = cleanedText.replace(pattern, '')
+        })
+        
+        cleanedText = cleanedText.replace(/\n\s*\n\s*\n/g, '\n\n').trim()
+        
+        console.log("✅ Fallback text-based novel generation completed")
+        setNovelContent(cleanedText)
+        const splitPages = splitNovelContent(cleanedText)
+        setNovelPages(splitPages)
+        setCurrentNovelPage(1)
+        setMode("novel")
+        
+      } catch (fallbackError) {
+        console.error("❌ Fallback generation also failed:", fallbackError)
+        alert(`画像ベース小説生成が失敗したため、テキストベース生成にフォールバックしましたが、それも失敗しました: ${fallbackError instanceof Error ? fallbackError.message : '不明なエラー'}`)
+      }
     } finally {
-      setIsGeneratingNovel(false) // End loading
+      setIsGeneratingNovel(false)
     }
   }
 
@@ -1664,24 +2183,54 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
 
     setIsGeneratingCover(true)
     try {
-      // 小説から視覚的要素のみを抽出して要約を作成
-      const visualSummary = extractVisualSummary(novelContent)
-      console.log("表紙生成用の視覚的要約:", visualSummary)
+      console.log("🚀 Starting ULTRA_STRICT cover generation process...")
       
+      // 🎨 Extract ultra-enhanced visual summary (completely text-free)
+      const visualSummary = extractVisualSummary(novelContent)
+      console.log("✨ ULTRA_ENHANCED visual summary:", visualSummary)
+      
+      // 📡 Send to enhanced generateCover API with ultra-strict prompt
       const result = await generateCover({
-        synopsis: visualSummary // 小説全文ではなく視覚的要約のみを送信
+        synopsis: visualSummary // Ultra-processed, text-free visual summary
       })
       
+      console.log("📨 Cover generation result:", result)
+      
       if (result.url) {
+        console.log("✅ Cover generated successfully! URL:", result.url)
         setCoverImageUrl(result.url)
+        
+        // 🎉 Success message with ultra-strict validation note
+        if (result.message) {
+          console.log("ℹ️ API Message:", result.message)
+        }
       } else {
-        alert(result.message || "表紙画像の生成に失敗しました。")
+        console.error("❌ Cover generation failed - no URL returned")
+        alert(result.message || "表紙画像の生成に失敗しました。ULTRA_STRICTモードで再試行しています...")
       }
     } catch (error) {
-      console.error("表紙生成エラー:", error)
-      alert("表紙画像の生成に失敗しました。もう一度お試しください。")
+      console.error("🚨 CRITICAL: Cover generation error:", error)
+      
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      const errorName = error instanceof Error ? error.name : 'UnknownError'
+      const errorStack = error instanceof Error ? error.stack : 'No stack trace'
+      
+      console.error("🔍 Error details:", {
+        name: errorName,
+        message: errorMessage,
+        stack: errorStack
+      })
+      
+      // Enhanced error message with debugging info
+      alert(`表紙画像の生成に失敗しました。
+      
+ULTRA_STRICTモードでの生成中にエラーが発生しました。
+エラー: ${errorMessage}
+
+もう一度お試しいただくか、サポートまでお問い合わせください。`)
     } finally {
       setIsGeneratingCover(false)
+      console.log("🏁 Cover generation process completed.")
     }
   }
 
@@ -2256,6 +2805,7 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
               }}>
                 {mode === "zine" ? (
                   <ZineCanvas
+                    ref={canvasRef}
                     currentPage={currentPage}
                     selectedElement={selectedElement}
                     setSelectedElement={setSelectedElement}
@@ -2266,6 +2816,7 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
                     setDragOffset={setDragOffset}
                     onAddTextAt={(x, y) => addTextElement(x, y)}
                     onAddImageAt={(x, y) => addImageElement(x, y)}
+                    onEditingChange={setEditingElement}
                   />
                 ) : (
                   <div className="w-full max-w-7xl mx-auto perspective-1000">

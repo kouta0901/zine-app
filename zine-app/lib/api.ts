@@ -28,6 +28,46 @@ export async function novelize(payload: {
   return apiCall("/novelize", payload);
 }
 
+// 画像ベースの小説化機能
+export async function novelizeWithImages(payload: {
+  concept: string;
+  world: string;
+  images: string[];
+  title: string;
+}): Promise<{ text: string }> {
+  return apiCall("/novelize-with-images", payload);
+}
+
+// 強化版画像ベースの小説化機能（AI解析データ対応）
+export async function novelizeWithImagesEnhanced(payload: {
+  concept: string;
+  world: string;
+  images: string[];
+  title: string;
+  imageDescriptions?: string[];
+  detailedPrompt?: string;
+  enhancedAnalysis?: Array<{
+    imageBase64: string;
+    ocrText: string;
+    caption: string;
+    nearbyText: string;
+    spatialContext: string;
+    pageIndex: number;
+    confidence: number;
+  }>;
+}): Promise<{ text: string }> {
+  // 詳細なプロンプト生成
+  const enhancedPayload = {
+    ...payload,
+    system_prompt: NOVEL_SYSTEM_PROMPT,
+    user_prompt: generateNovelPrompt(payload),
+    image_analysis_instructions: IMAGE_ANALYSIS_PROMPT,
+  };
+  
+  // 既存のAPIエンドポイントを使用しつつ、プロンプトを強化
+  return apiCall("/novelize-with-images", enhancedPayload);
+}
+
 // 作家レビュー・推敲機能
 export async function review(payload: {
   original: string;
@@ -35,6 +75,102 @@ export async function review(payload: {
 }): Promise<{ text: string }> {
   return apiCall("/review", payload);
 }
+
+// 🎯 NOVEL GENERATION PROMPTS - 小説生成用プロンプトシステム
+
+const NOVEL_SYSTEM_PROMPT = `You are a master storyteller and novelist with expertise in visual narrative interpretation. Your specialty is transforming visual content into compelling written narratives that capture every detail, emotion, and nuance present in the images. You excel at:
+- Analyzing visual elements and extracting narrative meaning
+- Creating rich, detailed descriptions that bring images to life
+- Weaving multiple visual elements into cohesive storylines
+- Maintaining consistency between visual content and written narrative`;
+
+const IMAGE_ANALYSIS_PROMPT = `When analyzing images for story generation:
+
+🔍 VISUAL ELEMENT EXTRACTION:
+- Identify all characters, objects, and settings visible in the image
+- Note specific details: clothing, expressions, poses, colors, textures
+- Recognize text elements: signs, labels, cards, written content
+- Detect emotional tone and atmosphere conveyed by the image
+
+📖 NARRATIVE INTERPRETATION:
+- Infer relationships between visual elements
+- Determine the temporal sequence if multiple images are provided
+- Extract implied actions, motivations, and conflicts
+- Identify symbolic or thematic elements
+
+🎨 DETAIL PRESERVATION:
+- Maintain fidelity to the original visual content
+- Include specific visual details in the narrative
+- Preserve the emotional tone of the images
+- Ensure no important visual element is omitted
+
+✍️ STORY CONSTRUCTION:
+- Build narrative bridges between disconnected images
+- Create logical flow while respecting visual content
+- Add dialogue and internal thoughts that match visual cues
+- Develop character voices consistent with their visual representation`;
+
+const generateNovelPrompt = (payload: {
+  concept: string;
+  world: string;
+  images: string[];
+  title: string;
+  imageDescriptions?: string[];
+}) => {
+  return `
+📚 NOVEL GENERATION TASK:
+
+Create a compelling novel based on the provided images with the following requirements:
+
+🎯 CONCEPT: ${payload.concept}
+🌍 WORLD SETTING: ${payload.world}
+📖 TITLE: ${payload.title}
+
+🖼️ IMAGE ANALYSIS REQUIREMENTS:
+1. Carefully analyze each provided image for:
+   - Character appearances and expressions
+   - Environmental details and settings
+   - Text content (cards, signs, labels)
+   - Objects and their significance
+   - Color schemes and mood
+   - Compositional elements suggesting narrative
+
+2. Extract narrative elements:
+   - Identify protagonist(s) and supporting characters from images
+   - Determine the story arc suggested by image sequence
+   - Recognize conflicts or challenges depicted
+   - Note emotional progressions
+
+3. Maintain visual fidelity:
+   - Every significant visual element must appear in the story
+   - Character descriptions must match their visual appearance
+   - Settings must reflect the environments shown
+   - Preserve any text content visible in images
+
+📝 WRITING REQUIREMENTS:
+- Style: Engaging narrative prose suitable for the genre
+- Length: Appropriate to fully explore the visual content
+- Voice: Consistent with the tone suggested by the images
+- Structure: Clear beginning, development, and conclusion
+
+⚠️ CRITICAL RULES:
+1. DO NOT invent elements not present in the images
+2. DO NOT ignore or skip visual details
+3. DO NOT change character appearances from what's shown
+4. DO include all text visible in images (cards, signs, etc.)
+5. DO maintain consistency with the visual narrative flow
+
+🎬 OUTPUT FORMAT:
+- Pure narrative text without metadata
+- Natural chapter or section breaks if needed
+- Seamless integration of visual elements into prose
+- Rich descriptions that honor the source images
+
+${payload.imageDescriptions ? '📋 ADDITIONAL IMAGE CONTEXT:\n' + payload.imageDescriptions.join('\n') : ''}
+
+Begin the novel now, ensuring every image element is faithfully represented in your narrative:
+`;
+};
 
 // 🔥 MEGA ULTRA STRICT PROMPT - 3層分離システム
 
@@ -86,59 +222,40 @@ const ARTISTIC_STYLE_PROMPT = `Style Reference: Create this artwork as if you we
 
 The result should be a wordless visual poem that speaks directly to the emotions through pure artistic expression.`;
 
-// 🛡️ MEGA TITLE BLOCKER - 完全タイトル除去システム
+// 🛡️ CONSERVATIVE TITLE CLEANER - 画像由来コンテンツ保護版
 function megaTitleBlocker(content: string): string {
-  console.log("🛡️ MEGA TITLE BLOCKER activated...");
+  console.log("🛡️ CONSERVATIVE TITLE CLEANER activated (preserves image content)...");
   
-  // 🚫 PHASE 1: 明示的なタイトル形式を完全除去
-  const titlePatterns = [
-    // 基本的なタイトル形式
+  // 🚫 PHASE 1: 明確な章・タイトル記法のみを限定除去（fix0912.md対応）
+  const conservativeTitlePatterns = [
+    // 明確な章・セクション形式のみ（行頭に限定）
     /^(タイトル|題名|書名|作品名|小説名)[:：]\s*.+$/gim,
-    // 章・セクション形式
-    /^(Chapter|第[0-9１-９一二三四五六七八九十]章|Scene|場面)[0-9０-９\s]*[:：].+$/gim,
-    // 引用符で囲まれたタイトル形式
-    /^[「『"'].+[」』"']$/gm,
-    // 大文字・英数字のタイトル形式
-    /^[A-Z\s\d]{2,}$/gm,
-    // カタカナタイトル形式（2文字以上の連続）
-    /^[ァ-ヶー・\s]{2,}$/gm,
-    // 特定の作品っぽい固有名詞
-    /新道タイル|ZINE|ワールド|ストーリー|テール|サーガ|クロニクル/gi
+    // 典型的な章記法のみ（行頭の第○章など）
+    /^(Chapter\s+\d+|第[0-9１-９一二三四五六七八九十]+章|Scene\s+\d+|場面\s*[0-9０-９]+)[:：\s]/gim,
   ];
   
   let cleanContent = content;
-  titlePatterns.forEach((pattern, index) => {
+  conservativeTitlePatterns.forEach((pattern, index) => {
     const beforeLength = cleanContent.length;
     cleanContent = cleanContent.replace(pattern, '');
     const afterLength = cleanContent.length;
     if (beforeLength !== afterLength) {
-      console.log(`🗑️ Title pattern ${index + 1} removed: ${beforeLength - afterLength} characters`);
+      console.log(`🗑️ Conservative pattern ${index + 1} removed: ${beforeLength - afterLength} characters`);
     }
   });
   
-  // 🚫 PHASE 2: 行頭の特殊文字・記号を除去
-  cleanContent = cleanContent.replace(/^[★☆◆◇■□▲△▼▽※]/gm, '');
+  // ⚠️ 以下の削除ルールを緩和（画像由来コンテンツ保護）
   
-  // 🚫 PHASE 3: 単独行のカタカナ・英字を除去（タイトル疑似）
-  const lines = cleanContent.split('\n');
-  const filteredLines = lines.filter(line => {
-    const trimmed = line.trim();
-    if (trimmed.length === 0) return false;
-    
-    // 短すぎる行（タイトルの可能性）
-    if (trimmed.length <= 2) return false;
-    
-    // 全角英数字のみの行
-    if (/^[Ａ-Ｚａ-ｚ０-９\s]+$/.test(trimmed)) return false;
-    
-    // カタカナのみの行
-    if (/^[ァ-ヶー・\s]+$/.test(trimmed) && trimmed.length < 10) return false;
-    
-    return true;
-  });
+  // 削除しない項目（fix0912.md推奨）:
+  // ❌ 引用符で囲まれた内容 → 画像の吹き出しや会話かもしれない
+  // ❌ 大文字・英数字の行 → 画像の看板・ラベルかもしれない  
+  // ❌ カタカナのみの行 → 画像内の重要な固有名詞かもしれない
+  // ❌ 短い行（2文字以下）→ 画像ラベルや感嘆詞かもしれない
   
-  cleanContent = filteredLines.join('\n');
-  console.log("✅ MEGA TITLE BLOCKER completed. Title removal verified.");
+  // 🚫 PHASE 2: 明らかな装飾記号のみ除去（限定的）
+  cleanContent = cleanContent.replace(/^[★☆※]\s*$/gm, ''); // 単独の装飾記号行のみ
+  
+  console.log("✅ CONSERVATIVE TITLE CLEANER completed. Image content preserved.");
   
   return cleanContent;
 }
