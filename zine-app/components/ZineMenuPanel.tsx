@@ -424,12 +424,12 @@ export function ZineMenuPanel({
                     {section.id === 'ai-writer' && (
                       <div className="space-y-3">
                         <div>
-                          <div className="text-xs mb-1" style={{ color: '#8b7355' }}>価値観</div>
-                          <Input value={aiWriterConfig.values} onChange={(e) => setAiWriterConfig({ ...aiWriterConfig, values: (e.target as HTMLInputElement).value })} placeholder="AI作家の価値観…" />
+                          <div className="text-xs mb-1" style={{ color: '#8b7355' }}>AI作家の性格・価値観</div>
+                          <Input value={aiWriterConfig.values} onChange={(e) => setAiWriterConfig({ ...aiWriterConfig, values: (e.target as HTMLInputElement).value })} placeholder="性格・価値観…" />
                         </div>
                         <div>
-                          <div className="text-xs mb-1" style={{ color: '#8b7355' }}>対話ルール</div>
-                          <Input value={aiWriterConfig.rules} onChange={(e) => setAiWriterConfig({ ...aiWriterConfig, rules: (e.target as HTMLInputElement).value })} placeholder="対話のルール…" />
+                          <div className="text-xs mb-1" style={{ color: '#8b7355' }}>作成時の注意点</div>
+                          <Input value={aiWriterConfig.rules} onChange={(e) => setAiWriterConfig({ ...aiWriterConfig, rules: (e.target as HTMLInputElement).value })} placeholder="作成時の注意点…" />
                         </div>
                       </div>
                     )}
