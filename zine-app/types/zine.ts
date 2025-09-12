@@ -12,6 +12,10 @@ export interface Element {
   color?: string
   fontSize?: number
   pageId: string
+  // 画像の詳細情報（小説変換用）
+  altText?: string        // 画像の代替テキスト
+  description?: string    // 画像の詳細説明
+  caption?: string       // 画像のキャプション
 }
 
 export interface Page {

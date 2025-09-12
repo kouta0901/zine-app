@@ -2,8 +2,14 @@
 
 import React from "react"
 import { motion } from "framer-motion"
-import { useRef, useState, useCallback, useEffect } from "react"
+import { useRef, useState, useCallback, useEffect, forwardRef, useImperativeHandle } from "react"
+import html2canvas from "html2canvas"
 import { Element, Page } from "@/types/zine"
+
+export interface ZineCanvasHandle {
+  captureAsImage: () => Promise<string>
+  startEditingElement: (elementId: string) => void
+}
 
 interface ZineCanvasProps {
   currentPage: Page
@@ -16,9 +22,10 @@ interface ZineCanvasProps {
   setDragOffset: (offset: { x: number; y: number }) => void
   onAddTextAt?: (x: number, y: number) => void
   onAddImageAt?: (x: number, y: number) => void
+  onEditingChange?: (elementId: string | null) => void
 }
 
-export function ZineCanvas({
+export const ZineCanvas = forwardRef<ZineCanvasHandle, ZineCanvasProps>(({
   currentPage,
   selectedElement,
   setSelectedElement,
@@ -28,8 +35,9 @@ export function ZineCanvas({
   dragOffset,
   setDragOffset,
   onAddTextAt,
-  onAddImageAt
-}: ZineCanvasProps) {
+  onAddImageAt,
+  onEditingChange
+}, ref) => {
   const canvasRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [zoom, setZoom] = useState(1.0) // Start with 100% zoom
@@ -42,6 +50,7 @@ export function ZineCanvas({
   const [resizeHandle, setResizeHandle] = useState<string | null>(null)
   const [initialResize, setInitialResize] = useState({ width: 0, height: 0, x: 0, y: 0, mouseX: 0, mouseY: 0 })
   const [canvasSize, setCanvasSize] = useState({ width: 1400, height: 900 })
+  const [editingElement, setEditingElement] = useState<string | null>(null)
   
   // Page boundaries definition (in original 1400px canvas space)
   const PAGE_BOUNDARIES = {
@@ -354,6 +363,110 @@ export function ZineCanvas({
     }
   }
 
+  // Capture functionality for image generation
+  const captureAsImage = useCallback(async (): Promise<string> => {
+    console.log('🎯 Starting ZineCanvas capture...')
+    
+    if (!containerRef.current) {
+      throw new Error('Canvas container not found')
+    }
+
+    // Store current transform state
+    const originalZoom = zoom
+    const originalPanOffset = { ...panOffset }
+
+    try {
+      // Temporarily reset zoom and pan for capture
+      console.log('📐 Resetting zoom and pan for capture')
+      setZoom(1.0)
+      setPanOffset({ x: 0, y: 0 })
+
+      // Wait for the transform to complete
+      await new Promise(resolve => setTimeout(resolve, 100))
+
+      // Find the main canvas element (the motion.div with the ZINE content)
+      const canvasElement = containerRef.current.querySelector('.relative.rounded-xl')
+      
+      if (!canvasElement) {
+        throw new Error('ZINE canvas element not found')
+      }
+
+      console.log('📸 Capturing canvas element with html2canvas')
+      
+      // Capture with html2canvas - optimized for smaller file size
+      const canvas = await html2canvas(canvasElement as HTMLElement, {
+        width: canvasSize.width,
+        height: canvasSize.height,
+        scale: 1, // Reduced from 2 to 1 for smaller file size while maintaining quality
+        backgroundColor: '#FFFEF9', // Set explicit background instead of null
+        useCORS: true,
+        allowTaint: true,
+        logging: false, // Reduce console noise
+        ignoreElements: (element) => {
+          // Skip elements that might contain problematic CSS
+          return element.tagName === 'STYLE' || element.classList?.contains('ignore-capture')
+        },
+        onclone: (clonedDoc) => {
+          // Replace oklch colors with compatible colors in cloned document
+          const style = clonedDoc.createElement('style')
+          style.textContent = `
+            * {
+              background-color: var(--fallback-bg, inherit) !important;
+              color: var(--fallback-color, inherit) !important;
+              border-color: var(--fallback-border, inherit) !important;
+            }
+          `
+          clonedDoc.head.appendChild(style)
+          
+          // Ensure all images are loaded in the cloned document
+          const images = clonedDoc.querySelectorAll('img')
+          images.forEach((img) => {
+            if (img.src) {
+              img.crossOrigin = 'anonymous'
+            }
+          })
+        }
+      })
+
+      // Use JPEG format with compression for significantly smaller file size
+      const base64 = canvas.toDataURL('image/jpeg', 0.7) // JPEG with 70% quality for good balance
+      
+      // Log approximate file size for monitoring
+      const sizeInKB = Math.round((base64.length * 3) / 4 / 1024)
+      console.log(`📏 Captured image size: ~${sizeInKB}KB`)
+      console.log('✅ Successfully captured ZineCanvas')
+      
+      return base64
+
+    } catch (error) {
+      console.error('❌ ZineCanvas capture failed:', error)
+      throw new Error(`キャンバスのキャプチャに失敗しました: ${error instanceof Error ? error.message : '不明なエラー'}`)
+    } finally {
+      // Restore original transform state
+      console.log('🔄 Restoring original zoom and pan')
+      setZoom(originalZoom)
+      setPanOffset(originalPanOffset)
+    }
+  }, [zoom, panOffset, canvasSize])
+
+  // Function to start editing an element
+  const startEditingElement = useCallback((elementId: string) => {
+    setEditingElement(elementId)
+    onEditingChange?.(elementId)
+    setTimeout(() => {
+      const element = document.querySelector(`[data-element] div[contenteditable="true"]`)
+      if (element) {
+        ;(element as HTMLElement).focus()
+      }
+    }, 0)
+  }, [onEditingChange])
+
+  // Expose methods through ref
+  useImperativeHandle(ref, () => ({
+    captureAsImage,
+    startEditingElement
+  }), [captureAsImage, startEditingElement])
+
   return (
     <div ref={containerRef} className="relative w-full h-full">
       {/* Zoom indicator */}
@@ -532,10 +645,8 @@ export function ZineCanvas({
                   }}
                   onDoubleClick={() => {
                     if (element.type === "text") {
-                      const newContent = prompt("テキストを編集:", element.content || "")
-                      if (newContent !== null) {
-                        updateElement(element.id, { content: newContent })
-                      }
+                      setEditingElement(element.id)
+                      onEditingChange?.(element.id)
                     }
                   }}
                     onMouseDown={(e) => {
@@ -557,11 +668,49 @@ export function ZineCanvas({
                 >
                   {element.type === "text" && (
                     <div
-                      className="w-full h-full flex items-center justify-center p-3 bg-white/90 rounded-lg shadow-sm border border-gray-200"
+                      contentEditable={editingElement === element.id}
+                      suppressContentEditableWarning={true}
+                      className={`w-full h-full flex items-center justify-center p-3 bg-white/90 rounded-lg shadow-sm border border-gray-200 ${
+                        editingElement === element.id ? 'outline-none ring-2 ring-purple-400' : ''
+                      }`}
                       style={{
                         fontSize: element.fontSize,
                         color: element.color,
                         fontWeight: "500",
+                      }}
+                      onBlur={(e) => {
+                        if (editingElement === element.id) {
+                          const newContent = e.target.textContent || ""
+                          updateElement(element.id, { content: newContent })
+                          setEditingElement(null)
+                          onEditingChange?.(null)
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (editingElement === element.id) {
+                          // 編集中は全てのキーイベントをここで処理
+                          e.stopPropagation()
+                          
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault()
+                            ;(e.target as HTMLElement).blur()
+                          } else if (e.key === 'Escape') {
+                            e.preventDefault()
+                            setEditingElement(null)
+                            onEditingChange?.(null)
+                          }
+                          // その他のキー（Backspace, Delete, 文字入力など）は自然な動作を許可
+                        }
+                      }}
+                      onClick={(e) => {
+                        if (editingElement === element.id) {
+                          e.stopPropagation()
+                        }
+                      }}
+                      onMouseDown={(e) => {
+                        if (editingElement === element.id) {
+                          e.stopPropagation()
+                        }
                       }}
                     >
                       {element.content}
@@ -761,7 +910,6 @@ export function ZineCanvas({
                   top: scaleCoordinate(menuPos.y) + 8, 
                   borderColor: "#e5dcc9" 
                 }}
-                onClick={(e) => e.stopPropagation()}
               >
                 <div className="flex flex-col">
                   <button className="px-3 py-2 text-sm hover:bg-amber-50 text-gray-700 text-left" onClick={placeTextHere}>テキストを追加</button>
@@ -775,4 +923,6 @@ export function ZineCanvas({
       </motion.div>
     </div>
   )
-}
+})
+
+ZineCanvas.displayName = 'ZineCanvas'
