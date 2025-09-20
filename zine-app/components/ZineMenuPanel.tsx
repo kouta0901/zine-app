@@ -120,7 +120,7 @@ export function ZineMenuPanel({
   ]
 
   const renderWriterReviewPanel = () => (
-    <div className="h-full flex flex-col overflow-hidden" style={{ height: "calc(100vh - 200px)", maxHeight: "calc(100vh - 200px)" }}>
+    <div className="h-full flex flex-col overflow-hidden fixed bottom-0 left-0 right-0 z-50 bg-white" style={{ height: "calc(100vh - 200px)", maxHeight: "calc(100vh - 200px)" }}>
       {/* Selected Text Display */}
       <div className="flex-shrink-0 p-4 border-b" style={{ borderColor: "rgba(139, 115, 85, 0.3)" }}>
         {selectedText ? (
@@ -209,11 +209,11 @@ export function ZineMenuPanel({
         ))}
       </div>
       
-      {/* Input Area */}
-      <div className="flex-shrink-0 p-4 border-t bg-opacity-95" style={{ borderColor: "rgba(139, 115, 85, 0.3)", backgroundColor: "rgba(247, 241, 232, 0.95)" }}>
+      {/* Input Area - Fixed at bottom */}
+      <div className="flex-shrink-0 p-4 border-t bg-opacity-95 fixed bottom-0 left-0 right-0 z-50" style={{ borderColor: "rgba(139, 115, 85, 0.3)", backgroundColor: "rgba(247, 241, 232, 0.95)" }}>
         <div className="flex gap-2">
           <Input
-            placeholder="作品について相談する..."
+            placeholder="修正指示を入力（テキスト選択なしで全文修正）..."
             value={reviewChatInput}
             onChange={(e) => setReviewChatInput(e.target.value)}
             onKeyPress={(e) => {

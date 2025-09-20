@@ -2901,14 +2901,11 @@ ULTRA_STRICTモードでの生成中にエラーが発生しました。
                       animate={{ opacity: 1, rotateY: 0 }}
                       transition={{ delay: 0.3, duration: 0.8 }}
                     >
-                      {/* Book spine and binding effect */}
+                      {/* Book spine and binding effect - NOVEL text removed */}
                       <div className="absolute -left-8 top-8 bottom-8 w-8 rounded-l-lg" style={{
                         background: "linear-gradient(180deg, #8b4513 0%, #a0522d 50%, #654321 100%)",
                         boxShadow: "inset -2px 0 4px rgba(0,0,0,0.3), -4px 0 8px rgba(0,0,0,0.2)"
                       }}>
-                        <div className="h-full w-full flex flex-col justify-center items-center text-xs text-amber-100 transform -rotate-90 whitespace-nowrap font-serif">
-                          <span className="tracking-wider">NOVEL</span>
-                        </div>
                       </div>
                       {/* Elegant Book Controls */}
                       <div className="absolute -top-16 right-0 flex items-center gap-3 z-10">
@@ -2957,40 +2954,6 @@ ULTRA_STRICTモードでの生成中にエラーが発生しました。
                         </Button>
                       </div>
 
-                      {/* Novel Page Navigation */}
-                      <div className="w-full max-w-6xl mx-auto mb-6 flex justify-center items-center gap-4">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={goToPreviousNovelPage}
-                          disabled={currentNovelPage <= 1}
-                          className="border-amber-600 text-amber-600 hover:bg-amber-50 disabled:opacity-50"
-                        >
-                          <ChevronLeft className="w-4 h-4 mr-1" />
-                          前のページ
-                        </Button>
-                        
-                        <div className="px-4 py-2 rounded-lg" style={{ 
-                          background: "rgba(139, 105, 20, 0.1)", 
-                          border: "1px solid rgba(139, 105, 20, 0.3)",
-                          color: "#8b6914"
-                        }}>
-                          <span className="text-sm font-medium">
-                            {currentNovelPage} / {Math.max(1, Math.ceil(novelPages.length / 2))}
-                          </span>
-                        </div>
-                        
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={goToNextNovelPage}
-                          disabled={currentNovelPage >= Math.max(1, Math.ceil(novelPages.length / 2))}
-                          className="border-amber-600 text-amber-600 hover:bg-amber-50 disabled:opacity-50"
-                        >
-                          次のページ
-                          <ChevronRight className="w-4 h-4 ml-1" />
-                        </Button>
-                      </div>
 
                       {/* Elegant Book Container */}
                       <div
@@ -3160,6 +3123,41 @@ ULTRA_STRICTモードでの生成中にエラーが発生しました。
                         </div>
                       </div>
                     </motion.div>
+                    
+                    {/* Novel Page Navigation - Moved below the book */}
+                    <div className="w-full max-w-6xl mx-auto mt-6 flex justify-center items-center gap-4">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={goToPreviousNovelPage}
+                        disabled={currentNovelPage <= 1}
+                        className="border-amber-600 text-amber-600 hover:bg-amber-50 disabled:opacity-50"
+                      >
+                        <ChevronLeft className="w-4 h-4 mr-1" />
+                        前のページ
+                      </Button>
+                      
+                      <div className="px-4 py-2 rounded-lg" style={{ 
+                        background: "rgba(139, 105, 20, 0.1)", 
+                        border: "1px solid rgba(139, 105, 20, 0.3)",
+                        color: "#8b6914"
+                      }}>
+                        <span className="text-sm font-medium">
+                          {currentNovelPage} / {Math.max(1, Math.ceil(novelPages.length / 2))}
+                        </span>
+                      </div>
+                      
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={goToNextNovelPage}
+                        disabled={currentNovelPage >= Math.max(1, Math.ceil(novelPages.length / 2))}
+                        className="border-amber-600 text-amber-600 hover:bg-amber-50 disabled:opacity-50"
+                      >
+                        次のページ
+                        <ChevronRight className="w-4 h-4 ml-1" />
+                      </Button>
+                    </div>
                     
                     {/* Cover Image Display Section */}
                     {coverImageUrl && (
