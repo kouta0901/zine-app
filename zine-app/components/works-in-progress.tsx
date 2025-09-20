@@ -5,6 +5,7 @@ import { useState, useEffect } from "react"
 import { BookOpen, FileText, Calendar, Edit3 } from "lucide-react"
 import { format } from "date-fns"
 import { getZines, getNovels } from "@/lib/api"
+import { DeleteButton } from "./delete-button"
 
 interface WorkInProgress {
   id: string
@@ -17,9 +18,10 @@ interface WorkInProgress {
 
 interface WorksInProgressProps {
   onWorkSelect: (work: WorkInProgress) => void
+  onWorkDelete?: (work: WorkInProgress) => void
 }
 
-export function WorksInProgress({ onWorkSelect }: WorksInProgressProps) {
+export function WorksInProgress({ onWorkSelect, onWorkDelete }: WorksInProgressProps) {
   const [works, setWorks] = useState<WorkInProgress[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isMounted, setIsMounted] = useState(false)
@@ -43,8 +45,10 @@ export function WorksInProgress({ onWorkSelect }: WorksInProgressProps) {
         const cloudData = await getZines()
         
         if (cloudData && cloudData.zines) {
+          // 🔥 Only include draft works in Works in Progress
           cloudData.zines.forEach((zine: any) => {
-            if (zine.title || zine.id) {
+            if ((zine.title || zine.id) && zine.status === "draft") {
+              console.log(`✅ Adding draft work to Works in Progress: "${zine.title}" (status: ${zine.status})`)
               savedWorks.push({
                 id: zine.id,
                 title: zine.title || 'Untitled ZINE',
@@ -52,6 +56,8 @@ export function WorksInProgress({ onWorkSelect }: WorksInProgressProps) {
                 lastModified: zine.lastModified || zine.createdAt || new Date().toISOString(),
                 cover: zine.coverImageUrl || zine.cover
               })
+            } else if (zine.title || zine.id) {
+              console.log(`🚫 Skipping non-draft work from Works in Progress: "${zine.title}" (status: ${zine.status})`)
             }
           })
         }
@@ -82,11 +88,12 @@ export function WorksInProgress({ onWorkSelect }: WorksInProgressProps) {
         
         // Fallback to localStorage when Cloud Storage fails
         try {
-          // Load saved ZINEs from localStorage
+          // 🔥 Load saved ZINEs from localStorage (only drafts)
           const zines = Object.keys(localStorage).filter(key => key.startsWith('zine_'))
           zines.forEach(key => {
             const zineData = JSON.parse(localStorage.getItem(key) || '{}')
-            if (zineData.title || zineData.id) {
+            if ((zineData.title || zineData.id) && (zineData.status === "draft" || !zineData.status)) {
+              console.log(`✅ Adding localStorage draft work: "${zineData.title}" (status: ${zineData.status || "undefined (treated as draft)"})`)
               savedWorks.push({
                 id: zineData.id || key,
                 title: zineData.title || 'Untitled ZINE',
@@ -94,6 +101,8 @@ export function WorksInProgress({ onWorkSelect }: WorksInProgressProps) {
                 lastModified: zineData.lastModified || zineData.createdAt || new Date().toISOString(),
                 cover: zineData.coverImageUrl || zineData.cover
               })
+            } else if (zineData.title || zineData.id) {
+              console.log(`🚫 Skipping localStorage non-draft work: "${zineData.title}" (status: ${zineData.status})`)
             }
           })
 
@@ -144,6 +153,29 @@ export function WorksInProgress({ onWorkSelect }: WorksInProgressProps) {
       }
     }
   }, [isMounted])
+
+  // Optimistic delete handler - immediately remove from UI
+  const handleWorkDeleteLocal = async (work: WorkInProgress) => {
+    if (!onWorkDelete) return
+
+    // 1. Immediately remove from UI (optimistic update)
+    const originalWorks = works
+    setWorks(prev => prev.filter(w => w.id !== work.id))
+
+    try {
+      // 2. Execute actual deletion
+      await onWorkDelete(work)
+      console.log('Work deleted successfully with immediate UI update:', work.title)
+    } catch (error) {
+      // 3. Rollback on error - restore the item
+      console.error('Failed to delete work, rolling back:', error)
+      setWorks(originalWorks)
+      
+      // TODO: Show error notification to user
+      // For now, log the error
+      console.error('Delete failed for:', work.title, error)
+    }
+  }
 
   // Prevent rendering during SSR to avoid hydration mismatch
   if (!isMounted) {
@@ -208,7 +240,13 @@ export function WorksInProgress({ onWorkSelect }: WorksInProgressProps) {
         transition={{ duration: 0.6, staggerChildren: 0.1 }}
       >
         {works.map((work, index) => (
-          <WorkCard key={work.id} work={work} index={index} onSelect={() => onWorkSelect(work)} />
+          <WorkCard 
+            key={work.id} 
+            work={work} 
+            index={index} 
+            onSelect={() => onWorkSelect(work)}
+            onDelete={onWorkDelete ? () => handleWorkDeleteLocal(work) : undefined}
+          />
         ))}
       </motion.div>
     </motion.section>
@@ -219,9 +257,10 @@ interface WorkCardProps {
   work: WorkInProgress
   index: number
   onSelect: () => void
+  onDelete?: () => void
 }
 
-function WorkCard({ work, index, onSelect }: WorkCardProps) {
+function WorkCard({ work, index, onSelect, onDelete }: WorkCardProps) {
   const [isHovered, setIsHovered] = useState(false)
 
   const isZine = work.type === 'zine'
@@ -269,6 +308,15 @@ function WorkCard({ work, index, onSelect }: WorkCardProps) {
             {isZine ? 'ZINE' : 'Novel'}
           </div>
         </div>
+
+        {/* Delete Button */}
+        {onDelete && (
+          <DeleteButton
+            onDelete={onDelete}
+            title={work.title}
+            isVisible={isHovered}
+          />
+        )}
 
         {/* Cover area */}
         <div className="relative aspect-[4/3] overflow-hidden">

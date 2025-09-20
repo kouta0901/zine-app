@@ -10,7 +10,7 @@ import { ZineViewer } from "@/components/zine-viewer"
 import { ZineCreator } from "@/components/zine-creator"
 import { NovelViewer } from "@/components/novel-viewer"
 import { CustomCursor } from "@/components/custom-cursor"
-import { getZineWithDetails, getZines } from "@/lib/api"
+import { getZineWithDetails, getZines, deleteZine } from "@/lib/api"
 import { SavedZineData, CreatorMode } from "@/types/zine"
 
 const mockZines = [
@@ -96,10 +96,60 @@ export default function ZineApp() {
         setLoading(true)
         const response = await getZines()
         
-        // Filter published books (status: "published") and convert to My Books format
+        // 🔥 Filter published books (status: "published") and convert to My Books format
         const publishedDataMap = new Map()
+        
+        // 🔥 Debug: Log all zines and their statuses
+        console.log("📚 All zines from API:")
+        response.zines.forEach((zine: any) => {
+          console.log(`  - "${zine.title}": status="${zine.status}", isComplete=${zine.isComplete}, coverImageUrl=${!!zine.coverImageUrl}`)
+        })
+
+        // 🔄 Auto-migrate existing works with covers to published status
+        const worksToUpdate: any[] = []
+        response.zines.forEach((zine: any) => {
+          // Check if work has content and cover but is still marked as draft
+          const hasContent = (zine.novelContent && zine.novelContent.trim()) || 
+                           (zine.pages && zine.pages.length > 0 && zine.pages.some((page: any) => page.elements && page.elements.length > 0))
+          const hasCover = !!zine.coverImageUrl
+          const isDraft = zine.status === "draft"
+          
+          if (hasContent && hasCover && isDraft) {
+            console.log(`🔄 Auto-migrating "${zine.title}" from draft to published (has content + cover)`)
+            worksToUpdate.push({
+              ...zine,
+              status: "published",
+              isComplete: true,
+              publishedDate: zine.publishedDate || new Date().toISOString()
+            })
+          }
+        })
+
+        // Update works that need migration
+        for (const work of worksToUpdate) {
+          try {
+            await saveZine(work)
+            console.log(`✅ Successfully migrated "${work.title}" to published status`)
+          } catch (error) {
+            console.error(`❌ Failed to migrate "${work.title}":`, error)
+          }
+        }
+
+        // Reload data if any migrations occurred
+        if (worksToUpdate.length > 0) {
+          console.log(`🔄 Reloading data after migrating ${worksToUpdate.length} works...`)
+          const updatedResponse = await getZines()
+          response = updatedResponse
+        }
+        
         const published = response.zines
-          .filter((zine: any) => zine.status === "published")
+          .filter((zine: any) => {
+            const isPublished = zine.status === "published"
+            if (!isPublished) {
+              console.log(`🚫 Filtered out "${zine.title}" from My Books (status: ${zine.status})`)
+            }
+            return isPublished
+          })
           .map((zine: any) => {
             // Store full data for viewer
             publishedDataMap.set(zine.id, zine)
@@ -108,7 +158,7 @@ export default function ZineApp() {
               id: zine.id,
               title: zine.title,
               author: zine.author || "You",
-              cover: zine.coverImageUrl || zine.thumbnail || "/placeholder.svg?height=400&width=300",
+              cover: zine.coverImageUrl || zine.thumbnail || zine.cover || "/placeholder.svg?height=400&width=300",
               pages: zine.novelPages?.length || zine.pages?.length || 1,
               genre: zine.category || "Fiction",
               createdAt: zine.publishedDate || zine.createdAt,
@@ -331,17 +381,39 @@ export default function ZineApp() {
     try {
       const response = await getZines()
       const publishedDataMap = new Map()
+      
+      // 🔥 Debug: Log refresh data
+      console.log("🔄 Refreshing published books:")
+      response.zines.forEach((zine: any) => {
+        console.log(`  - "${zine.title}": status="${zine.status}", isComplete=${zine.isComplete}`)
+      })
+      
       const published = response.zines
-        .filter((zine: any) => zine.status === "published")
+        .filter((zine: any) => {
+          const isPublished = zine.status === "published"
+          if (!isPublished) {
+            console.log(`🚫 Refresh: Filtered out "${zine.title}" from My Books (status: ${zine.status})`)
+          }
+          return isPublished
+        })
         .map((zine: any) => {
           // Store full data for viewer
           publishedDataMap.set(zine.id, zine)
+          
+          // 🔍 デバッグ用ログ: 表紙データの状態確認
+          const coverSources = {
+            coverImageUrl: zine.coverImageUrl,
+            thumbnail: zine.thumbnail,
+            cover: zine.cover
+          }
+          const finalCover = zine.coverImageUrl || zine.thumbnail || zine.cover || "/placeholder.svg?height=400&width=300"
+          console.log(`📖 ZINE "${zine.title}" cover sources:`, coverSources, "→ Final:", finalCover)
           
           return {
             id: zine.id,
             title: zine.title,
             author: zine.author || "You",
-            cover: zine.coverImageUrl || zine.thumbnail || "/placeholder.svg?height=400&width=300",
+            cover: finalCover,
             pages: zine.novelPages?.length || zine.pages?.length || 1,
             genre: zine.category || "Fiction",
             createdAt: zine.publishedDate || zine.createdAt,
@@ -355,6 +427,55 @@ export default function ZineApp() {
       console.log("Refreshed published books:", published)
     } catch (error) {
       console.error("Failed to refresh published books:", error)
+    }
+  }
+
+  // Handle ZINE deletion (published books)
+  const handleZineDelete = async (zine: any) => {
+    try {
+      console.log("Deleting ZINE:", zine.title, zine.id)
+      await deleteZine(zine.id)
+      
+      // Remove from local state
+      setPublishedBooks(prev => prev.filter(book => book.id !== zine.id))
+      setPublishedBooksData(prev => {
+        const newMap = new Map(prev)
+        newMap.delete(zine.id)
+        return newMap
+      })
+      
+      console.log("ZINE deleted successfully:", zine.title)
+    } catch (error) {
+      console.error("Failed to delete ZINE:", error)
+      // TODO: Show error notification to user
+    }
+  }
+
+  // Handle work deletion (works in progress)
+  const handleWorkDelete = async (work: any) => {
+    try {
+      console.log("Deleting work:", work.title, work.id)
+      
+      if (work.type === 'zine') {
+        await deleteZine(work.id)
+      }
+      // For novels, we only have localStorage for now
+      else if (work.type === 'novel') {
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem(`novel_${work.id}`)
+          window.dispatchEvent(new Event('localStorageUpdate'))
+        }
+      }
+      
+      console.log("Work deleted successfully:", work.title)
+    } catch (error) {
+      console.error("Failed to delete work:", error)
+      // For localStorage-only items, try to remove them anyway
+      if (typeof window !== 'undefined') {
+        const key = work.type === 'zine' ? `zine_${work.id}` : `novel_${work.id}`
+        localStorage.removeItem(key)
+        window.dispatchEvent(new Event('localStorageUpdate'))
+      }
     }
   }
 
@@ -447,6 +568,8 @@ export default function ZineApp() {
                 onZineSelect={handleZineSelect}
                 onCreateNew={handleCreateNew}
                 onWorkSelect={handleWorkSelect}
+                onZineDelete={handleZineDelete}
+                onWorkDelete={handleWorkDelete}
                 mouseX={enableMouseMotion ? mouseX : undefined}
                 mouseY={enableMouseMotion ? mouseY : undefined}
               />

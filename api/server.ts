@@ -14,22 +14,30 @@ const app = express();
 // Middleware
 app.use(cors());
 // Increase request body size limits to handle base64 images from client
-app.use(bodyParser.json({ limit: "10mb" }));
-app.use(bodyParser.urlencoded({ limit: "10mb", extended: true }));
+// 🔥 Increased to 50MB to handle large novel data with images
+app.use(bodyParser.json({ limit: "50mb" }));
+app.use(bodyParser.urlencoded({ limit: "50mb", extended: true }));
 
 // Initialize Vertex AI
 const project = process.env.GOOGLE_CLOUD_PROJECT || "vital-analogy-470911-t0";
-const location = process.env.GOOGLE_CLOUD_LOCATION || "global";
+const location = process.env.GOOGLE_CLOUD_LOCATION || "us-central1"; // Changed from 'global' to valid region
 
+// 🔥 Fix: Use explicit authentication with GoogleAuth
 const vertexAI = new VertexAI({
   project: project,
-  location: location,
+  location: location, // Now uses us-central1
+  googleAuthOptions: {
+    scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+  },
 });
 
-// Initialize Vertex AI for image generation (global region)
+// Initialize Vertex AI for image generation (us-central1 region)
 const vertexAIGlobal = new VertexAI({
   project: project,
-  location: "global", // Use global for proper model availability
+  location: "us-central1", // Changed from 'global' to valid region for image generation
+  googleAuthOptions: {
+    scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+  },
 });
 
 // Initialize Google Generative AI for image generation (fallback)
@@ -63,6 +71,36 @@ app.get("/healthz", (_, res) => {
   res.json({ ok: true, timestamp: new Date().toISOString() });
 });
 
+// 🛡️ Response validation helper
+async function validateAndParseResponse(response: Response, context: string): Promise<any> {
+  const contentType = response.headers.get('content-type');
+  const responseText = await response.text();
+
+  // Check if response is HTML (error page)
+  if (contentType?.includes('text/html') || responseText.startsWith('<!DOCTYPE')) {
+    console.error(`❌ ${context}: Received HTML error page instead of JSON`);
+    console.error(`Response status: ${response.status}`);
+    console.error(`HTML preview: ${responseText.substring(0, 200)}...`);
+    throw new Error(`API returned HTML error page. Status: ${response.status}. Check if the location/region is valid.`);
+  }
+
+  // Check if response is valid
+  if (!response.ok) {
+    console.error(`❌ ${context}: HTTP error ${response.status}`);
+    console.error(`Error response: ${responseText}`);
+    throw new Error(`HTTP ${response.status}: ${responseText}`);
+  }
+
+  // Try to parse JSON
+  try {
+    return JSON.parse(responseText);
+  } catch (error) {
+    console.error(`❌ ${context}: Failed to parse JSON response`);
+    console.error(`Response text: ${responseText.substring(0, 500)}...`);
+    throw new Error(`Invalid JSON response: ${error}`);
+  }
+}
+
 // 🔍 SERVER-SIDE OCR PROCESSING
 interface OCRResult {
   text: string;
@@ -74,6 +112,38 @@ interface OCRResult {
   }>;
 }
 
+/**
+ * 画像データを正規化する関数
+ * Data URLから純粋なbase64データを抽出し、Document AI / Gemini Vision用に最適化
+ */
+function normalizeImageData(imageData: any): string {
+  // 型チェック
+  if (typeof imageData !== 'string') {
+    console.warn('⚠️ Image data is not a string, converting:', typeof imageData);
+    if (imageData && typeof imageData.toString === 'function') {
+      imageData = imageData.toString();
+    } else {
+      throw new Error(`Invalid image data type: ${typeof imageData}`);
+    }
+  }
+
+  // Data URLプレフィックスを除去
+  const base64Data = imageData.replace(/^data:image\/[a-z]+;base64,/, '');
+
+  // base64データの妥当性チェック
+  if (!base64Data || base64Data.length === 0) {
+    throw new Error('Empty base64 data after normalization');
+  }
+
+  // base64形式の簡易検証
+  if (!/^[A-Za-z0-9+/=]+$/.test(base64Data)) {
+    throw new Error('Invalid base64 format');
+  }
+
+  console.log(`📏 Normalized image data: ${Math.round(base64Data.length / 1024)}KB`);
+  return base64Data;
+}
+
 async function processOCROnServer(base64Image: string): Promise<OCRResult> {
   if (!processorName) {
     console.log("🔧 OCR: Document AI not configured, returning empty result");
@@ -81,11 +151,15 @@ async function processOCROnServer(base64Image: string): Promise<OCRResult> {
   }
 
   try {
+    // 🔥 FIX: 画像データを正規化
+    const normalizedBase64 = normalizeImageData(base64Image);
+
+    console.log("📄 Sending image to Document AI OCR processor...");
     const [result] = await documentAI.processDocument({
       name: processorName,
       rawDocument: {
-        content: base64Image,
-        mimeType: "image/png",
+        content: normalizedBase64, // ✅ プレフィックス除去済みのbase64データ
+        mimeType: "image/jpeg", // JPEG形式を明示的に指定
       },
     });
 
@@ -136,6 +210,7 @@ async function processOCROnServer(base64Image: string): Promise<OCRResult> {
 
   } catch (error) {
     console.error("❌ OCR processing failed:", error);
+    // 🔥 FIX: エラー時も空の結果を返してプロセス継続
     return { text: "", confidence: 0, words: [] };
   }
 }
@@ -165,6 +240,11 @@ function extractBoundingBox(boundingPoly: any): { x: number; y: number; width: n
 // 🎨 SERVER-SIDE CAPTIONING PROCESSING
 async function processCaptioningOnServer(base64Image: string, pageIndex: number): Promise<string> {
   try {
+    // 🔥 FIX: 画像データを正規化
+    const normalizedBase64 = normalizeImageData(base64Image);
+
+    console.log(`🎨 Generating caption for page ${pageIndex + 1}...`);
+
     const model = vertexAI.getGenerativeModel({
       model: "gemini-2.5-flash",
       generationConfig: {
@@ -173,38 +253,19 @@ async function processCaptioningOnServer(base64Image: string, pageIndex: number)
       }
     });
 
-    const prompt = `この画像を詳細に分析してください。以下の観点から日本語で説明してください：
-
-🎨 視覚的要素:
-- 人物の外見、表情、姿勢
-- 物体、道具、アイテム
-- 背景、環境、建築物
-- 色彩、光、影の効果
-
-📖 物語的要素:
-- 感情的な雰囲気
-- アクション、動き
-- 関係性、相互作用
-- 時間、場所の手がかり
-
-🔍 テキスト要素:
-- 看板、ラベル、文字
-- 記号、マーク
-- 読み取れるすべてのテキスト
-
-簡潔で物語に役立つ分析をお願いします。`;
+    const captionPrompt = `この画像について、ZINEや雑誌のページとして簡潔で物語に役立つ分析をお願いします。`;
 
     const imagePart = {
       inline_data: {
-        mime_type: "image/png",
-        data: base64Image.replace(/^data:image\/[a-z]+;base64,/, '')
+        mime_type: "image/jpeg",
+        data: normalizedBase64 // ✅ プレフィックス除去済みのbase64データ
       }
     } as any;
 
     const result = await model.generateContent({
       contents: [{
         role: "user",
-        parts: [{ text: prompt }, imagePart]
+        parts: [{ text: captionPrompt }, imagePart]
       }]
     });
 
@@ -216,7 +277,8 @@ async function processCaptioningOnServer(base64Image: string, pageIndex: number)
 
   } catch (error) {
     console.error("❌ Captioning failed:", error);
-    return `ページ${pageIndex + 1}には印象的な要素が描かれており、物語の重要な場面を表現している。`;
+    // 🔥 FIX: エラー時はデフォルトキャプションを返してプロセス継続
+    return `ページ ${pageIndex + 1} の画像（キャプション生成に失敗）`;
   }
 }
 
@@ -243,7 +305,7 @@ app.post("/novelize", async (req, res) => {
         throw new Error("Failed to get access token");
       }
       
-      const apiUrl = `https://aiplatform.googleapis.com/v1/projects/${project}/locations/global/publishers/google/models/gemini-2.5-flash:generateContent`;
+      const apiUrl = `https://aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/gemini-2.5-flash:generateContent`;
       
       const requestBody = {
         contents: [{
@@ -359,28 +421,56 @@ app.post("/novelize-with-images", async (req, res) => {
     
     if (images && images.length > 0) {
       console.log("📄 Starting server-side OCR and captioning processing...");
-      
+
       for (let i = 0; i < images.length; i++) {
-        const imageBase64 = images[i];
-        console.log(`Processing page ${i + 1}/${images.length}...`);
-        
-        // Process OCR and captioning in parallel for each image
-        const [ocrResult, caption] = await Promise.all([
-          processOCROnServer(imageBase64),
-          processCaptioningOnServer(imageBase64, i)
-        ]);
-        
-        serverAnalysisData.push({
-          pageIndex: i,
-          ocrText: ocrResult.text,
-          caption: caption,
-          confidence: ocrResult.confidence,
-          wordCount: ocrResult.words.length,
-          processedOnServer: true // Mark as server-processed for quality assurance
-        });
-        
-        console.log(`✅ Page ${i + 1} processed: ${ocrResult.text.length} OCR chars, ${caption.length} caption chars`);
+        try {
+          const imageBase64 = images[i];
+          console.log(`Processing page ${i + 1}/${images.length}...`);
+
+          // 🔥 FIX: 画像データの事前検証
+          if (!imageBase64) {
+            console.warn(`⚠️ Empty image data for page ${i + 1}, skipping...`);
+            continue;
+          }
+
+          // Process OCR and captioning in parallel for each image
+          const [ocrResult, caption] = await Promise.all([
+            processOCROnServer(imageBase64).catch(error => {
+              console.warn(`⚠️ OCR failed for page ${i + 1}:`, error.message);
+              return { text: "", confidence: 0, words: [] };
+            }),
+            processCaptioningOnServer(imageBase64, i).catch(error => {
+              console.warn(`⚠️ Captioning failed for page ${i + 1}:`, error.message);
+              return `ページ ${i + 1} の画像（処理失敗）`;
+            })
+          ]);
+
+          serverAnalysisData.push({
+            pageIndex: i,
+            ocrText: ocrResult.text,
+            caption: caption,
+            confidence: ocrResult.confidence,
+            wordCount: ocrResult.words.length,
+            processedOnServer: true
+          });
+
+          console.log(`✅ Page ${i + 1} processed: ${ocrResult.text.length} chars OCR, caption length: ${caption.length}`);
+
+        } catch (error) {
+          console.error(`❌ Failed to process page ${i + 1}:`, error);
+          // 🔥 FIX: 個別ページのエラーでプロセス全体を停止せず、デフォルトデータで継続
+          serverAnalysisData.push({
+            pageIndex: i,
+            ocrText: "",
+            caption: `ページ ${i + 1} の画像（処理失敗）`,
+            confidence: 0,
+            wordCount: 0,
+            processedOnServer: false
+          });
+        }
       }
+
+      console.log(`🎯 Server-side processing completed: ${serverAnalysisData.length} pages processed`);
     } else {
       console.log("⚠️ No images provided for server-side processing");
     }
@@ -465,7 +555,7 @@ AIキャプション: ${data.caption || '(なし)'}
         throw new Error("Failed to get access token");
       }
       
-      const apiUrl = `https://aiplatform.googleapis.com/v1/projects/${project}/locations/global/publishers/google/models/gemini-2.5-flash:generateContent`;
+      const apiUrl = `https://aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/gemini-2.5-flash:generateContent`;
       
       // Build contents array with images and text
       const contents = [{
@@ -579,7 +669,7 @@ app.post("/review", async (req, res) => {
         throw new Error("Failed to get access token");
       }
       
-      const apiUrl = `https://aiplatform.googleapis.com/v1/projects/${project}/locations/global/publishers/google/models/gemini-2.5-flash:generateContent`;
+      const apiUrl = `https://aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/gemini-2.5-flash:generateContent`;
       
       const requestBody = {
         contents: [{
@@ -691,7 +781,7 @@ app.post("/embed", async (req, res) => {
         throw new Error("Failed to get access token");
       }
       
-      const apiUrl = `https://aiplatform.googleapis.com/v1/projects/${project}/locations/global/publishers/google/models/text-embedding-004:generateContent`;
+      const apiUrl = `https://aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/text-embedding-004:generateContent`;
       
       const requestBody = {
         contents: [{
@@ -767,27 +857,23 @@ app.post("/cover", async (req, res) => {
 
     console.log("Cover generation requested for synopsis:", synopsis.substring(0, 200) + "...");
     
-    // Create a pure abstract art prompt for wordless book cover generation
-    const coverPrompt = `Create a stunning abstract book cover artwork based on the following visual and emotional essence. Generate a completely wordless, text-free artistic composition that captures the story's atmosphere through pure visual elements:
+    // 🔥 MEGA ULTRA STRICT Cover Generation - サーバーサイド完全版
+    console.log("🔥 MEGA ULTRA STRICT Cover Generation activated on server!");
+    console.log("🛡️ Title information completely blocked - only visual essence will be processed");
+    
+    // 🛡️ SYSTEM PROMPT - マスター抽象アーティスト設定
+    const SYSTEM_PROMPT = `You are a master abstract artist and wordless book cover designer. Your specialty is creating pure visual compositions without any textual elements. You communicate stories through color, light, form, and atmosphere alone. You never include text, letters, words, or readable symbols in your artwork. Think of yourself as creating a visual symphony that speaks to the soul without words.`;
 
-【Visual and Emotional Essence】
-${synopsis}
+    // 🌟 MAIN CREATIVE PROMPT - ポジティブ創作指示
+    const MAIN_CREATIVE_PROMPT = `Create a stunning abstract book cover that captures the emotional essence through pure visual elements:
 
-## CRITICAL REQUIREMENTS - ABSOLUTELY NO TEXT:
-- NEVER include any text, words, letters, titles, or readable symbols
-- NEVER display "振動タイル", "新道タイル", "小説タイトル", "ZINE", or any title text
-- Create pure abstract visual art without any textual elements
-- Focus solely on colors, shapes, lighting, and atmospheric effects
+🎨 ARTISTIC DIRECTION:
+- Paint like Monet capturing light and atmosphere
+- Use color relationships like Rothko expressing deep emotions  
+- Apply brushwork techniques of Turner for dramatic skies
+- Create compositional balance like Kandinsky's abstract works
 
-## Artistic Direction:
-- Professional book cover composition (vertical orientation, portrait format)
-- Express the story's mood and themes through pure visual metaphors
-- Beautiful abstract background with organic and atmospheric elements
-- High-quality artwork suitable for print publication
-- Dramatic lighting and atmospheric effects
-- Color palette that reflects the narrative's emotional tone
-
-## Visual Elements to Include:
+🌈 VISUAL ELEMENTS TO INCLUDE:
 - Flowing organic shapes and natural forms
 - Atmospheric lighting effects (golden hour, moonlight, dramatic shadows)
 - Emotional color temperature variations (warm/cool contrasts)
@@ -796,19 +882,34 @@ ${synopsis}
 - Distant organic shapes suggesting life and movement
 - Impressionistic landscapes with dreamy qualities
 
-## Design Style:
-- Modern and sophisticated abstract art approach
-- Visually compelling composition that attracts readers
-- Commercial-grade quality suitable for professional publishing
-- Professional abstract artist level execution
-- Pure visual communication without relying on text
+🎭 EMOTIONAL EXPRESSION:
+- Convert story mood into color harmonies
+- Express narrative tension through compositional balance
+- Translate themes into abstract visual metaphors
+- Create depth through layered atmospheric effects
 
-## Technical Requirements:
-- High resolution (minimum 300dpi equivalent)
-- Aspect ratio: 3:4 or 2:3 (suitable for book cover proportions)
-- Rich color palette suitable for print production
+📐 TECHNICAL REQUIREMENTS:
+- Vertical book cover aspect ratio (3:4)
+- Professional artistic composition
+- High visual impact for book cover appeal
+- Sophisticated color palette suitable for literary works`;
 
-ABSOLUTE PROHIBITION: Do NOT include any text, letters, words, titles, character names, place names, or readable symbols of any kind. Create a purely visual, wordless artistic composition.`;
+    // ⛔ MEGA NEGATIVE PROMPT - 完全禁止事項
+    const MEGA_NEGATIVE_PROMPT = `ABSOLUTELY FORBIDDEN - COMPLETE PROHIBITION:
+text, words, letters, alphabets, characters, numbers, digits, symbols, punctuation, marks, titles, headings, captions, labels, tags, stickers, logos, brands, trademarks, signs, billboards, placards, books with visible text, magazines, newspapers, documents, subtitles, watermarks, credits, readable content, writing, script, fonts, calligraphy, typography, signage, lettering, inscriptions, annotations, Japanese text, English text, Chinese text, Korean text, Arabic text, any language text, license plates, street signs, store signs, building signs, neon signs, digital displays, screens with text, posters with text, banners with text, book spines with text, covers with text, newspapers, magazines with text, documents with text, handwriting, print text, digital text, carved text, painted text, embossed text, any readable symbols, mathematical symbols, currency symbols, trademark symbols, copyright symbols, hashtags, URLs, email addresses, phone numbers, dates in text form, brand names, company names, product names, location names, personal names, character names, place names, author names, publisher names, ISBN numbers, barcodes, QR codes`;
+
+    // 🎨 3-LAYER PROMPT ASSEMBLY
+    const coverPrompt = `${SYSTEM_PROMPT}
+
+${MAIN_CREATIVE_PROMPT}
+
+【Visual and Emotional Essence】
+${synopsis}
+
+MEGA NEGATIVE PROHIBITION:
+${MEGA_NEGATIVE_PROMPT}
+
+FINAL ABSOLUTE REQUIREMENT: Create a completely wordless, text-free artistic composition. No readable content of any kind.`;
 
     try {
       // Try direct HTTP API call to Vertex AI first (working method)
@@ -825,7 +926,7 @@ ABSOLUTE PROHIBITION: Do NOT include any text, letters, words, titles, character
           throw new Error("Failed to get access token");
         }
         
-        // Make direct HTTP request to Vertex AI API
+        // Make direct HTTP request to Vertex AI API (using global location for image generation)
         const apiUrl = `https://aiplatform.googleapis.com/v1/projects/${project}/locations/global/publishers/google/models/gemini-2.5-flash-image-preview:generateContent`;
         
         const requestBody = {
@@ -834,10 +935,46 @@ ABSOLUTE PROHIBITION: Do NOT include any text, letters, words, titles, character
             parts: [{
               text: coverPrompt
             }]
-          }]
+          }],
+          // 🔥 MEGA ULTRA STRICT: 画像生成のための完全設定
+          generation_config: {
+            response_modalities: ["TEXT", "IMAGE"],  // 画像生成必須
+            max_output_tokens: 8192,
+            temperature: 0.8,
+            // 🛡️ 文字禁止パラメータ強化
+            top_p: 0.9,
+            top_k: 40,
+            candidate_count: 1
+          },
+          // 🚫 テキスト抑制強化設定（generation_configから独立）
+          safety_settings: [
+            {
+              category: "HARM_CATEGORY_HARASSMENT",
+              threshold: "BLOCK_NONE"
+            },
+            {
+              category: "HARM_CATEGORY_HATE_SPEECH", 
+              threshold: "BLOCK_NONE"
+            },
+            {
+              category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+              threshold: "BLOCK_NONE"
+            },
+            {
+              category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+              threshold: "BLOCK_NONE"
+            }
+          ]
         };
         
         console.log("Making direct API call to:", apiUrl);
+        console.log("🔍 MEGA ULTRA STRICT Prompt Analysis:");
+        console.log("  - System Prompt length:", SYSTEM_PROMPT.length);
+        console.log("  - Main Prompt length:", MAIN_CREATIVE_PROMPT.length);  
+        console.log("  - Negative Prompt length:", MEGA_NEGATIVE_PROMPT.length);
+        console.log("  - Synopsis length:", synopsis.length);
+        console.log("  - Final Prompt length:", coverPrompt.length);
+        console.log("🚀 Sending MEGA ULTRA STRICT payload to Vertex AI...");
         
         // Use Node.js built-in fetch (available in Node 18+)
         // Node.js built-in fetch is available without import
@@ -853,6 +990,12 @@ ABSOLUTE PROHIBITION: Do NOT include any text, letters, words, titles, character
         
         if (!response.ok) {
           const errorText = await response.text();
+          // より詳細なエラーログ
+          console.error("API Error Details:", {
+            status: response.status,
+            statusText: response.statusText,
+            body: errorText
+          });
           throw new Error(`Direct API call failed: ${response.status} ${response.statusText}\n${errorText}`);
         }
         
@@ -1109,14 +1252,26 @@ app.post("/embed", async (req, res) => {
 app.post("/zines", async (req, res) => {
   try {
     const zineData = req.body;
-    
+
+    // 🔥 Log request size for debugging
+    const requestSize = JSON.stringify(req.body).length;
+    console.log(`📊 Received ZINE save request: ${requestSize} bytes (${(requestSize / 1024 / 1024).toFixed(2)} MB)`);
+
     if (!zineData || !zineData.title) {
+      console.error("❌ ZINE validation failed: missing title");
       return res.status(400).json({ error: "ZINE data with title is required" });
     }
 
     // Generate unique ID if not provided
     const zineId = zineData.id || `zine_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
+
+    console.log(`📝 Processing ZINE: "${zineData.title}" (ID: ${zineId})`);
+    console.log(`  - Mode: ${zineData.currentMode || 'unknown'}`);
+    console.log(`  - Status: ${zineData.status || 'draft'}`);
+    console.log(`  - Has novel content: ${!!zineData.novelContent}`);
+    console.log(`  - Has cover: ${!!zineData.coverImageUrl}`);
+    console.log(`  - Pages count: ${zineData.pages?.length || 0}`);
+
     // Add metadata
     const savedZine = {
       ...zineData,
@@ -1125,21 +1280,47 @@ app.post("/zines", async (req, res) => {
       createdAt: zineData.createdAt || new Date().toISOString()
     };
 
+    // 🔥 Check data size before saving
+    const dataToSave = JSON.stringify(savedZine, null, 2);
+    const saveSize = dataToSave.length;
+    console.log(`💾 Saving to Cloud Storage: ${saveSize} bytes (${(saveSize / 1024 / 1024).toFixed(2)} MB)`);
+
+    if (saveSize > 50 * 1024 * 1024) { // Error if over 50MB
+      console.error(`❌ ZINE data too large: ${(saveSize / 1024 / 1024).toFixed(2)} MB`);
+      return res.status(413).json({
+        error: "ZINE data too large",
+        details: `Data size ${(saveSize / 1024 / 1024).toFixed(2)} MB exceeds limit`
+      });
+    }
+
     // Save to Cloud Storage as JSON file
     const fileName = `zines/${zineId}.json`;
     const file = storage.bucket(zinesBucketName).file(fileName);
-    
-    await file.save(JSON.stringify(savedZine, null, 2), {
+
+    console.log(`☁️ Writing to bucket: ${zinesBucketName}/${fileName}`);
+
+    await file.save(dataToSave, {
       metadata: {
         contentType: 'application/json',
       },
     });
 
-    console.log(`ZINE saved: ${zineId}`);
+    console.log(`✅ ZINE saved successfully: ${zineId}`);
     res.json({ id: zineId, message: "ZINE saved successfully" });
   } catch (error) {
-    console.error("ZINE save error:", error);
-    res.status(500).json({ error: "Failed to save ZINE" });
+    // 🔥 Enhanced error logging
+    console.error("❌ ZINE save error:", error);
+    console.error("Error details:", {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      name: error instanceof Error ? error.name : undefined
+    });
+
+    // Return more detailed error information
+    res.status(500).json({
+      error: "Failed to save ZINE",
+      details: error instanceof Error ? error.message : 'Unknown error occurred'
+    });
   }
 });
 

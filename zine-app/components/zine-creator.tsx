@@ -47,9 +47,9 @@ interface TextSuggestion {
   timestamp: Date
 }
 
-export function ZineCreator({ onBack }: ZineCreatorProps) {
+export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: ZineCreatorProps) {
   const canvasRef = useRef<ZineCanvasHandle>(null)
-  const [mode, setMode] = useState<"zine" | "novel">("zine")
+  const [currentMode, setCurrentMode] = useState<"zine" | "novel">("zine")
   const [zineTitle, setZineTitle] = useState("")
   const [currentPageIndex, setCurrentPageIndex] = useState(0)
   const [selectedElement, setSelectedElement] = useState<string | null>(null)
@@ -124,6 +124,68 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
     }
   }, [pages.length]) // Only run when pages array length changes to avoid infinite loops
 
+  // initialData処理用のuseEffect - 既存作品の復元
+  useEffect(() => {
+    if (initialData) {
+      console.log('📂 Restoring existing work data:', initialData.title)
+      console.log('🔍 Restoring mode:', initialData.currentMode || 'zine')
+
+      // タイトルを復元
+      if (initialData.title) {
+        setZineTitle(initialData.title)
+      }
+
+      // モードを復元（デフォルトはzine）
+      if (initialData.currentMode) {
+        setCurrentMode(initialData.currentMode)
+        console.log('🎯 Mode restored to:', initialData.currentMode)
+      } else {
+        setCurrentMode("zine")
+        console.log('🎯 Mode set to default: zine')
+      }
+
+      // ページを復元
+      if (initialData.pages && initialData.pages.length > 0) {
+        setPages(initialData.pages)
+        console.log('📄 Pages restored:', initialData.pages.length)
+      }
+
+      // 小説コンテンツを復元
+      if (initialData.novelContent) {
+        setNovelContent(initialData.novelContent)
+        console.log('📖 Novel content restored:', initialData.novelContent.substring(0, 100) + '...')
+
+        // 小説ページを復元または分割
+        if (initialData.novelPages && initialData.novelPages.length > 0) {
+          setNovelPages(initialData.novelPages)
+          console.log('📚 Novel pages restored:', initialData.novelPages.length)
+        } else {
+          // novelPagesがない場合は分割処理を実行
+          const splitPages = splitNovelContent(initialData.novelContent)
+          setNovelPages(splitPages)
+          console.log('📚 Novel pages split:', splitPages.length)
+        }
+      }
+
+      // 表紙画像を復元
+      if (initialData.coverImageUrl) {
+        setCoverImageUrl(initialData.coverImageUrl)
+        console.log('🖼️ Cover image restored:', initialData.coverImageUrl)
+      }
+
+      console.log('✅ Work data restoration completed')
+    } else {
+      console.log('🆕 New work creation - using default zine mode')
+      setCurrentMode("zine")
+      setZineTitle("")
+      setPages([{ id: "page1", elements: [], title: "Page 1-2" }])
+      setNovelContent("")
+      setNovelPages([])
+      setCoverImageUrl(null)
+      console.log('✅ Default state initialized for new creation')
+    }
+  }, [initialData]) // initialDataが変更された時に実行
+
   const zineMenuSections = [
     { id: "concept" as MenuSection, label: "コンセプト", icon: Target },
     { id: "ai-writer" as MenuSection, label: "AI作家", icon: User },
@@ -136,7 +198,7 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
     { id: "onepoint" as MenuSection, label: "ワンポイント", icon: Target },
   ]
 
-  const currentMenuSections = mode === "zine" ? zineMenuSections : novelMenuSections
+  const currentMenuSections = currentMode === "zine" ? zineMenuSections : novelMenuSections
 
   const sendMessage = () => {
     if (!chatInput.trim()) return
@@ -338,7 +400,7 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
     setPages(updatedPages)
     setSelectedElement(newElement.id)
     
-    // Auto-start editing mode for new text elements
+    // Auto-start editing currentMode for new text elements
     setTimeout(() => {
       if (canvasRef.current) {
         canvasRef.current.startEditingElement(newElement.id)
@@ -459,13 +521,13 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
 
   const handleMenuSectionClick = (sectionId: MenuSection) => {
     setActiveMenuSection(sectionId)
-    if (mode === "zine" && ["concept", "ai-writer", "worldview"].includes(sectionId)) {
+    if (currentMode === "zine" && ["concept", "ai-writer", "worldview"].includes(sectionId)) {
       setShowConfigPanel(true)
     }
   }
 
   const renderConfigPanel = () => {
-    if (!showConfigPanel || mode !== "zine") return null
+    if (!showConfigPanel || currentMode !== "zine") return null
 
     switch (activeMenuSection) {
       case "concept":
@@ -1934,7 +1996,7 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
           .replace(/[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]+さん|[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]+君|[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]+ちゃん/g, 'silhouette') // Names → silhouettes
           .replace(/[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]{2,}学校|[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]{2,}大学/g, 'architectural structure') // Schools → architecture
           .replace(/[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]{2,}市|[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]{2,}町/g, 'urban landscape') // Cities → landscapes
-          .replace(/電話|メール|スマホ|パソコン/g, '') // Remove modern tech references
+          .replace(/電話|メール|スマホ|パソコン/g, '') // Remove currentModern tech references
         
         return abstract.trim()
       })
@@ -2052,7 +2114,7 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
         const splitPages = splitNovelContent(cleanedText)
         setNovelPages(splitPages)
         setCurrentNovelPage(1)
-        setMode("novel")
+        setCurrentMode("novel")
       }
       
     } catch (error) {
@@ -2060,6 +2122,17 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
       alert("画像ベース小説生成に失敗しました。ページ内容や画像サイズを確認して再試行してください。")
     } finally {
       setIsGeneratingNovel(false)
+    }
+  }
+
+  // 🎯 完成度判定関数 - 作品が完成しているかチェック
+  const isWorkComplete = () => {
+    if (currentMode === "novel") {
+      // 小説モード: 小説コンテンツ + 表紙の両方が必要
+      return novelContent && novelContent.trim() && coverImageUrl
+    } else {
+      // ZINEモード: ページコンテンツ + 表紙の両方が必要
+      return pages.length > 0 && pages.some(page => page.elements && page.elements.length > 0) && coverImageUrl
     }
   }
 
@@ -2072,20 +2145,71 @@ export function ZineCreator({ onBack }: ZineCreatorProps) {
 
     setIsSaving(true)
     try {
+      // 🔥 完成度に基づいてステータスを決定
+      const isComplete = isWorkComplete()
+      const workStatus = isComplete ? "published" : "draft"
+      
+      console.log("🎯 Save Debug Info:")
+      console.log("  - Current Mode:", currentMode)
+      console.log("  - Novel Content:", !!novelContent, "Length:", novelContent?.length || 0)
+      console.log("  - Pages Count:", pages.length)
+      console.log("  - Cover Image URL:", !!coverImageUrl, "URL:", coverImageUrl?.substring(0, 50) || "none")
+      console.log("  - Is Complete:", isComplete)
+      console.log("  - Final Status:", workStatus)
+
+      // 🔥 Clean up data before saving to reduce size
+      const cleanedPages = pages.map(page => ({
+        ...page,
+        elements: page.elements.map(element => {
+          // Remove temporary data and keep only necessary fields
+          const { tempData, ...cleanElement } = element as any
+          // If image element, ensure we're not storing base64 data unnecessarily
+          if (cleanElement.type === 'image' && cleanElement.src?.startsWith('data:image')) {
+            // Keep only the first 100 chars of base64 for preview if needed
+            console.log(`  - Cleaning image element: ${cleanElement.id}, original size: ${cleanElement.src.length}`)
+            // Don't truncate the image data, but log its size for debugging
+          }
+          return cleanElement
+        })
+      }))
+
       const zineData = {
         title: zineTitle || "無題のZINE",
-        status: "draft",
+        status: workStatus, // 🔥 完成度に基づいて "published" または "draft"
+        isComplete: isComplete, // 🔥 完成フラグを追加
+        currentMode: currentMode, // 🔥 現在のモードを保存
         description: `${pages.length}ページのZINE`,
-        pages: pages,
+        pages: cleanedPages, // Use cleaned pages
         conceptConfig: conceptConfig,
         worldviewConfig: worldviewConfig,
         novelContent: novelContent,
         novelPages: novelPages,
+        coverImageUrl: coverImageUrl, // 🔥 表紙画像URLを保存データに含める
         createdAt: new Date().toISOString()
       }
 
+      // 🔥 Log data size before saving
+      const dataSize = JSON.stringify(zineData).length
+      console.log(`📊 ZINE data size before save: ${dataSize} bytes (${(dataSize / 1024 / 1024).toFixed(2)} MB)`)
+
+      if (dataSize > 10 * 1024 * 1024) { // Warning if over 10MB
+        console.warn(`⚠️ Large ZINE data detected: ${(dataSize / 1024 / 1024).toFixed(2)} MB`)
+      }
+
       const result = await saveZine(zineData)
-      alert(`ZINEが保存されました！ID: ${result.id}`)
+
+      // 🔥 完成度に応じてメッセージを変更
+      if (isComplete) {
+        alert(`✅ 作品が完成し、My Booksに追加されました！\nタイトル: ${zineData.title}\nID: ${result.id}`)
+      } else {
+        alert(`📝 作品が下書きとして保存されました。\n完成させるには${currentMode === "novel" ? "小説内容と表紙" : "ページ内容と表紙"}の両方が必要です。\nID: ${result.id}`)
+      }
+
+      // 📚 Published Booksの更新を通知
+      if (onPublishedBooksUpdate) {
+        console.log('📚 Triggering published books update after save')
+        onPublishedBooksUpdate()
+      }
     } catch (error) {
       console.error("保存エラー:", error)
       alert("ZINEの保存に失敗しました。もう一度お試しください。")
@@ -2644,7 +2768,7 @@ ULTRA_STRICTモードでの生成中にエラーが発生しました。
       <div className="flex h-screen">
         {/* Left Menu */}
         <ZineMenuPanel
-          mode={mode}
+          mode={currentMode}
           activeMenuSection={activeMenuSection}
           setActiveMenuSection={setActiveMenuSection}
           activeNovelSection={activeNovelSection}
@@ -2681,7 +2805,7 @@ ULTRA_STRICTモードでの生成中にエラーが発生しました。
 
         {/* Main Content */}
         <div className="flex-1 flex flex-col" onKeyDown={handleKeyDown} tabIndex={0}>
-          {showConfigPanel && mode === "zine" ? (
+          {showConfigPanel && currentMode === "zine" ? (
             <div className="flex-1 p-8">
               <Button
                 variant="ghost"
@@ -2698,11 +2822,11 @@ ULTRA_STRICTモードでの生成中にエラーが発生しました。
           ) : (
             <>
               <ZineToolbar
-                onBack={mode === "novel" ? () => setMode("zine") : onBack}
+                onBack={currentMode === "novel" ? () => setCurrentMode("zine") : onBack}
                 zineTitle={zineTitle}
                 setZineTitle={setZineTitle}
-                mode={mode}
-                setMode={setMode}
+                mode={currentMode}
+                setMode={setCurrentMode}
                 onSave={handleSaveZine}
                 isSaving={isSaving}
                 currentPageIndex={currentPageIndex}
@@ -2723,7 +2847,7 @@ ULTRA_STRICTモードでの生成中にエラーが発生しました。
               <div className="flex-1 overflow-hidden pt-16 relative" style={{
                 background: "linear-gradient(135deg, #f3e9d4 0%, #f1e5c7 50%, #ede0ba 100%)"
               }}>
-                {mode === "zine" ? (
+                {currentMode === "zine" ? (
                   <ZineCanvas
                     ref={canvasRef}
                     currentPage={currentPage}
@@ -3044,8 +3168,8 @@ ULTRA_STRICTモードでの生成中にエラーが発生しました。
                 )}
               </div>
 
-              {/* Moved Page Navigation for ZINE mode below editor */}
-              {mode === "zine" && (
+              {/* Moved Page Navigation for ZINE currentMode below editor */}
+              {currentMode === "zine" && (
                 <div className="w-full flex items-center justify-center mt-6 mb-4">
                   <div className="flex items-center gap-3">
                     <Button
@@ -3097,8 +3221,12 @@ ULTRA_STRICTモードでの生成中にエラーが発生しました。
         isGenerating={isGeneratingCover}
         coverImageUrl={coverImageUrl}
         onGenerate={handleCoverGeneration}
-        onComplete={() => {
+        onComplete={async () => {
+          console.log("🏁 Complete button pressed, auto-saving work...")
           setShowCoverModal(false)
+          
+          // 🔥 完了ボタンを押した時に自動保存
+          await handleSaveZine()
           onBack() // ホーム画面に戻る
         }}
         novelTitle={zineTitle || "あなたの小説"}

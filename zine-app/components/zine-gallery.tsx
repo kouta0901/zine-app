@@ -5,6 +5,7 @@ import { useState } from "react"
 import { User, Calendar, BookOpen, Plus } from "lucide-react"
 import { format } from "date-fns"
 import { WorksInProgressWrapper } from "./works-in-progress-wrapper"
+import { DeleteButton } from "./delete-button"
 
 interface Zine {
   id: string
@@ -22,11 +23,13 @@ interface ZineGalleryProps {
   onZineSelect: (zine: Zine) => void
   onCreateNew: () => void
   onWorkSelect?: (work: any) => void
+  onZineDelete?: (zine: Zine) => void
+  onWorkDelete?: (work: any) => void
   mouseX?: MotionValue<number>
   mouseY?: MotionValue<number>
 }
 
-export function ZineGallery({ zines, onZineSelect, onCreateNew, onWorkSelect, mouseX, mouseY }: ZineGalleryProps) {
+export function ZineGallery({ zines, onZineSelect, onCreateNew, onWorkSelect, onZineDelete, onWorkDelete, mouseX, mouseY }: ZineGalleryProps) {
   const myBooks = zines.filter((zine) => zine.isOwned)
   const otherBooks = zines.filter((zine) => !zine.isOwned)
 
@@ -49,7 +52,7 @@ export function ZineGallery({ zines, onZineSelect, onCreateNew, onWorkSelect, mo
         }}
       >
         {/* Works in Progress Section */}
-        {onWorkSelect && <WorksInProgressWrapper onWorkSelect={onWorkSelect} />}
+        {onWorkSelect && <WorksInProgressWrapper onWorkSelect={onWorkSelect} onWorkDelete={onWorkDelete} />}
 
         <motion.section
           className="mb-16"
@@ -81,7 +84,14 @@ export function ZineGallery({ zines, onZineSelect, onCreateNew, onWorkSelect, mo
             transition={{ duration: 0.6, staggerChildren: 0.1 }}
           >
             {myBooks.map((zine, index) => (
-              <ZineCard key={zine.id} zine={zine} index={index} onSelect={() => onZineSelect(zine)} isOwned />
+              <ZineCard 
+                key={zine.id} 
+                zine={zine} 
+                index={index} 
+                onSelect={() => onZineSelect(zine)} 
+                onDelete={onZineDelete ? () => onZineDelete(zine) : undefined}
+                isOwned 
+              />
             ))}
           </motion.div>
         </motion.section>
@@ -116,10 +126,11 @@ interface ZineCardProps {
   zine: Zine
   index: number
   onSelect: () => void
+  onDelete?: () => void
   isOwned?: boolean
 }
 
-function ZineCard({ zine, index, onSelect, isOwned }: ZineCardProps) {
+function ZineCard({ zine, index, onSelect, onDelete, isOwned }: ZineCardProps) {
   const [isHovered, setIsHovered] = useState(false)
 
   return (
@@ -161,6 +172,15 @@ function ZineCard({ zine, index, onSelect, isOwned }: ZineCardProps) {
           </div>
         )}
 
+        {/* Delete Button - only show for owned zines */}
+        {isOwned && onDelete && (
+          <DeleteButton
+            onDelete={onDelete}
+            title={zine.title}
+            isVisible={isHovered}
+          />
+        )}
+
         {/* Cover Image */}
         <div className="relative aspect-[3/4] overflow-hidden">
           <motion.img
@@ -172,6 +192,11 @@ function ZineCard({ zine, index, onSelect, isOwned }: ZineCardProps) {
               filter: isHovered ? "brightness(1.1) contrast(1.1)" : "brightness(1) contrast(1)",
             }}
             transition={{ duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
+            onError={(e) => {
+              // 🔥 画像読み込み失敗時のfallback処理
+              console.log("Cover image load failed for:", zine.title, "URL:", zine.cover)
+              e.currentTarget.src = "/placeholder.svg?height=400&width=300"
+            }}
           />
 
           {/* Hover overlay with wave effect */}

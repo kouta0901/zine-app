@@ -6,7 +6,7 @@ import { ArrowLeft, Lightbulb, Edit3, CheckCircle, User, Bot, Image, Wand2 } fro
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { novelize, review, generateCover } from "@/lib/api"
+import { review, generateCover } from "@/lib/api"
 
 interface WritingWorkspaceProps {
   project: any
@@ -50,23 +50,10 @@ export function WritingWorkspace({ project, currentPhase, onPhaseChange, onBack 
     setUserInput("")
   }
 
-  // 小説化機能
+  // 小説化機能（本ワークスペースは現在非使用のため無効化）
   const handleNovelize = async () => {
-    if (!concept || !world || !prompt) {
-      alert("コンセプト、世界観、プロンプトをすべて入力してください。")
-      return
-    }
-
-    setIsGenerating(true)
-    try {
-      const result = await novelize({ concept, world, prompt })
-      setGeneratedContent(result.text)
-    } catch (error) {
-      console.error("小説化エラー:", error)
-      alert("小説の生成に失敗しました。")
-    } finally {
-      setIsGenerating(false)
-    }
+    alert("このワークスペースの小説生成は現在無効化されています。ZINEモードから小説化をご利用ください。")
+    return
   }
 
   // レビュー機能

@@ -1,9 +1,13 @@
 // 一時的にハードコード（後で環境変数に戻す）
 // 注: 実際のデプロイされたAPI URLを使用
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'https://zine-api-830716651527.us-central1.run.app';
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'https://zine-api-2be2c4ycca-uc.a.run.app';
 
 // API呼び出し用のヘルパー関数
 async function apiCall(endpoint: string, payload: any) {
+  // 🔥 Log payload size for debugging
+  const payloadSize = JSON.stringify(payload).length;
+  console.log(`🚀 API call to ${endpoint}: ${payloadSize} bytes (${(payloadSize / 1024 / 1024).toFixed(2)} MB)`);
+
   const response = await fetch(`${API_BASE}${endpoint}`, {
     method: "POST",
     headers: {
@@ -13,7 +17,22 @@ async function apiCall(endpoint: string, payload: any) {
   });
 
   if (!response.ok) {
-    throw new Error(`API call failed: ${response.statusText}`);
+    // 🔥 Try to get detailed error message from response
+    let errorDetails = response.statusText;
+    try {
+      const errorResponse = await response.json();
+      if (errorResponse.details) {
+        errorDetails = `${errorResponse.error}: ${errorResponse.details}`;
+      } else if (errorResponse.error) {
+        errorDetails = errorResponse.error;
+      }
+    } catch (e) {
+      // If response is not JSON, use status text
+      console.error("Failed to parse error response:", e);
+    }
+
+    console.error(`❌ API call failed: ${response.status} - ${errorDetails}`);
+    throw new Error(`API call failed: ${errorDetails}`);
   }
 
   return response.json();
@@ -420,7 +439,7 @@ ${ARTISTIC_STYLE_PROMPT}`;
     
     // Enhanced parameters for Gemini 2.5 Flash Image
     generation_parameters: {
-      model: "gemini-2.5-flash-image",
+      model: "gemini-2.5-flash-image-preview",
       aspect_ratio: "3:4",
       quality: "premium",
       style_focus: "abstract_artistic",

@@ -5,9 +5,10 @@ import { WorksInProgress } from './works-in-progress'
 
 interface WorksInProgressWrapperProps {
   onWorkSelect: (work: any) => void
+  onWorkDelete?: (work: any) => void
 }
 
-export function WorksInProgressWrapper({ onWorkSelect }: WorksInProgressWrapperProps) {
+export function WorksInProgressWrapper({ onWorkSelect, onWorkDelete }: WorksInProgressWrapperProps) {
   const [isClient, setIsClient] = useState(false)
 
   useEffect(() => {
@@ -29,5 +30,5 @@ export function WorksInProgressWrapper({ onWorkSelect }: WorksInProgressWrapperP
     )
   }
 
-  return <WorksInProgress onWorkSelect={onWorkSelect} />
+  return <WorksInProgress onWorkSelect={onWorkSelect} onWorkDelete={onWorkDelete} />
 }
