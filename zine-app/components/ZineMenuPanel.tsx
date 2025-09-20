@@ -120,9 +120,9 @@ export function ZineMenuPanel({
   ]
 
   const renderWriterReviewPanel = () => (
-    <div className="h-full flex flex-col overflow-hidden fixed bottom-0 left-0 right-0 z-50 bg-white" style={{ height: "calc(100vh - 200px)", maxHeight: "calc(100vh - 200px)" }}>
+    <div className="mt-4 space-y-4">
       {/* Selected Text Display */}
-      <div className="flex-shrink-0 p-4 border-b" style={{ borderColor: "rgba(139, 115, 85, 0.3)" }}>
+      <div className="p-4 border rounded-lg" style={{ borderColor: "rgba(139, 115, 85, 0.3)", backgroundColor: "rgba(247, 241, 232, 0.5)" }}>
         {selectedText ? (
           <div className="mb-2 p-3 rounded text-sm" style={{
             background: "linear-gradient(135deg, rgba(255, 235, 59, 0.1) 0%, rgba(255, 235, 59, 0.05) 100%)",
@@ -180,7 +180,11 @@ export function ZineMenuPanel({
       </div>
       
       {/* Chat Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4" style={{ minHeight: "100px", maxHeight: "calc(100vh - 400px)" }}>
+      <div className="h-64 overflow-y-auto p-4 space-y-4 border rounded-lg" style={{ 
+        borderColor: "rgba(139, 115, 85, 0.3)", 
+        backgroundColor: "rgba(247, 241, 232, 0.3)",
+        minHeight: "200px"
+      }}>
         {reviewChatMessages.map((message) => (
           <div
             key={message.id}
@@ -209,8 +213,11 @@ export function ZineMenuPanel({
         ))}
       </div>
       
-      {/* Input Area - Fixed at bottom */}
-      <div className="flex-shrink-0 p-4 border-t bg-opacity-95 fixed bottom-0 left-0 right-0 z-50" style={{ borderColor: "rgba(139, 115, 85, 0.3)", backgroundColor: "rgba(247, 241, 232, 0.95)" }}>
+      {/* Input Area - Fixed at bottom of panel */}
+      <div className="p-4 border-t rounded-lg" style={{ 
+        borderColor: "rgba(139, 115, 85, 0.3)", 
+        backgroundColor: "rgba(247, 241, 232, 0.8)" 
+      }}>
         <div className="flex gap-2">
           <Input
             placeholder="修正指示を入力（テキスト選択なしで全文修正）..."

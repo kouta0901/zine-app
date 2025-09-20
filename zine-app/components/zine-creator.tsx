@@ -2901,12 +2901,6 @@ ULTRA_STRICTモードでの生成中にエラーが発生しました。
                       animate={{ opacity: 1, rotateY: 0 }}
                       transition={{ delay: 0.3, duration: 0.8 }}
                     >
-                      {/* Book spine and binding effect - NOVEL text removed */}
-                      <div className="absolute -left-8 top-8 bottom-8 w-8 rounded-l-lg" style={{
-                        background: "linear-gradient(180deg, #8b4513 0%, #a0522d 50%, #654321 100%)",
-                        boxShadow: "inset -2px 0 4px rgba(0,0,0,0.3), -4px 0 8px rgba(0,0,0,0.2)"
-                      }}>
-                      </div>
                       {/* Elegant Book Controls */}
                       <div className="absolute -top-16 right-0 flex items-center gap-3 z-10">
                         <div className="flex items-center gap-2 px-4 py-2 rounded-full" style={{
