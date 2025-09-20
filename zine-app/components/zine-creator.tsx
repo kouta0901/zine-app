@@ -35,6 +35,7 @@ import { ZineCanvas, ZineCanvasHandle } from "./ZineCanvas"
 import { ZineMenuPanel } from "./ZineMenuPanel"
 import { CoverGenerationModal } from "./CoverGenerationModal"
 import { SuggestionBubble } from "./SuggestionBubble"
+import { ConfirmationDialog } from "./ConfirmationDialog"
 import { ZineCreatorProps, Element, Page, ChatMessage, TextSelection, ReviewSuggestion, CreatorMode, MenuSection } from "@/types/zine"
 
 // TextSuggestion interface for the new suggestion system
@@ -58,6 +59,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
   const [activeNovelSection, setActiveNovelSection] = useState<string | null>(null)
   const [showNovelizeButton, setShowNovelizeButton] = useState(false) // Track if novelize button should be shown
   const [showConfigPanel, setShowConfigPanel] = useState(false) // Declare the variable here
+  const [showModeChangeConfirm, setShowModeChangeConfirm] = useState(false) // Confirmation dialog for mode change
   const [showZineExamples, setShowZineExamples] = useState(false)
   const [isGeneratingNovel, setIsGeneratingNovel] = useState(false) // Loading state for novel generation
   const [isModifyingStyle, setIsModifyingStyle] = useState(false) // Loading state for style modifications
@@ -199,6 +201,23 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
   ]
 
   const currentMenuSections = currentMode === "zine" ? zineMenuSections : novelMenuSections
+
+  // Handle mode change with confirmation dialog for novel -> zine
+  const handleModeChangeConfirm = () => {
+    if (currentMode === "novel" && novelContent && novelContent.trim()) {
+      setShowModeChangeConfirm(true)
+    } else {
+      // Direct switch if no novel content or switching from zine to novel
+      setCurrentMode("zine")
+    }
+  }
+
+  const confirmModeChange = () => {
+    setCurrentMode("zine")
+    // Optionally clear novel content if user confirms
+    // setNovelContent("")
+    // setNovelPages([])
+  }
 
   const sendMessage = () => {
     if (!chatInput.trim()) return
@@ -2853,7 +2872,7 @@ ULTRA_STRICTモードでの生成中にエラーが発生しました。
           ) : (
             <>
               <ZineToolbar
-                onBack={currentMode === "novel" ? () => setCurrentMode("zine") : onBack}
+                onBack={currentMode === "novel" ? handleModeChangeConfirm : onBack}
                 zineTitle={zineTitle}
                 setZineTitle={setZineTitle}
                 mode={currentMode}
@@ -3095,12 +3114,25 @@ ULTRA_STRICTモードでの生成中にエラーが発生しました。
                             <div className="w-1/2 pl-4 relative">
                               <div className="px-12 py-20 h-full">
                                 <div
-                                  className="text-base leading-8 whitespace-pre-wrap h-full"
+                                  className="text-base leading-8 whitespace-pre-wrap cursor-text h-full"
                                   style={{
                                     color: currentTheme.text,
                                     fontFamily: 'Georgia, "Times New Roman", serif',
                                     lineHeight: "2.2",
                                     textShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                                  }}
+                                  onMouseUp={handleTextSelection}
+                                  onMouseDown={(e) => {
+                                    // 作家レビューモードで既に選択がある場合、新しい選択を防ぐ
+                                    if (isSelectionProtected && selectedText) {
+                                      e.preventDefault()
+                                    }
+                                  }}
+                                  onFocus={(e) => {
+                                    // フォーカス時に選択が失われるのを防ぐ
+                                    if (isSelectionProtected && selectedText) {
+                                      e.preventDefault()
+                                    }
                                   }}
                                 >
                                   {novelPages.length > 0 
@@ -3237,6 +3269,18 @@ ULTRA_STRICTモードでの生成中にエラーが発生しました。
         />
       ))}
       
+      {/* Mode Change Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={showModeChangeConfirm}
+        onClose={() => setShowModeChangeConfirm(false)}
+        onConfirm={confirmModeChange}
+        title="モード変更の確認"
+        message="ZINEモードに戻ると、現在の小説コンテンツが削除される可能性があります。よろしいですか？"
+        confirmText="はい"
+        cancelText="いいえ"
+        variant="warning"
+      />
+
       {/* Cover Generation Modal */}
       <CoverGenerationModal
         isOpen={showCoverModal}
