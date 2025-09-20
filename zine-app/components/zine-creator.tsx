@@ -2232,7 +2232,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
     }
   }
 
-  const handleCoverGeneration = async () => {
+  const handleCoverGeneration = async (keywords?: string[]) => {
     if (!novelContent.trim()) {
       alert("表紙を生成するには、まず小説を生成してください。")
       return
@@ -2241,23 +2241,30 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
     setIsGeneratingCover(true)
     try {
       console.log("🚀 Starting ULTRA_STRICT cover generation process...")
-      
+      if (keywords && keywords.length > 0) {
+        console.log("🎯 User keywords provided:", keywords)
+      }
+
       // 🎨 Extract ultra-enhanced visual summary (completely text-free)
       const visualSummary = extractVisualSummary(novelContent)
       console.log("✨ ULTRA_ENHANCED visual summary:", visualSummary)
-      
+
       // 📡 Send to enhanced generateCover API with ultra-strict prompt (no title)
       const result = await generateCover({
-        synopsis: visualSummary // Ultra-processed, text-free visual summary
+        synopsis: visualSummary, // Ultra-processed, text-free visual summary
+        keywords: keywords // Pass user keywords if provided
         // Deliberately not passing title to prevent any title text from appearing
       })
-      
+
       console.log("📨 Cover generation result:", result)
-      
+
       if (result.url) {
         console.log("✅ Cover generated successfully! URL:", result.url)
+        if (keywords && keywords.length > 0) {
+          console.log("🎨 Enhanced with keywords:", keywords.join(', '))
+        }
         setCoverImageUrl(result.url)
-        
+
         // 🎉 Success message with ultra-strict validation note
         if (result.message) {
           console.log("ℹ️ API Message:", result.message)
@@ -2268,20 +2275,20 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
       }
     } catch (error) {
       console.error("🚨 CRITICAL: Cover generation error:", error)
-      
+
       const errorMessage = error instanceof Error ? error.message : String(error)
       const errorName = error instanceof Error ? error.name : 'UnknownError'
       const errorStack = error instanceof Error ? error.stack : 'No stack trace'
-      
+
       console.error("🔍 Error details:", {
         name: errorName,
         message: errorMessage,
         stack: errorStack
       })
-      
+
       // Enhanced error message with debugging info
       alert(`表紙画像の生成に失敗しました。
-      
+
 ULTRA_STRICTモードでの生成中にエラーが発生しました。
 エラー: ${errorMessage}
 

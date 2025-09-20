@@ -405,6 +405,7 @@ function extractEnhancedVisualSummary(novelText: string): string {
 export async function generateCover(payload: {
   synopsis: string;
   title?: string;
+  keywords?: string[];
 }): Promise<{ url: string; message?: string }> {
   console.log("🔥 MEGA ULTRA STRICT Cover Generation activated!");
   console.log("🛡️ Title information completely blocked - only visual essence will be processed");
@@ -413,9 +414,25 @@ export async function generateCover(payload: {
   // タイトル情報を完全に無視し、synopsis からのみ処理
   const titleFreeSynopsis = payload.synopsis; // タイトル情報は意図的に使用しない
   console.log("📦 Original synopsis length:", titleFreeSynopsis.length);
-  
+
   // 🎨 STEP 2: MEGA ENHANCED VISUAL EXTRACTION with TITLE BLOCKING
-  const abstractVisualEssence = extractEnhancedVisualSummary(titleFreeSynopsis);
+  let abstractVisualEssence = extractEnhancedVisualSummary(titleFreeSynopsis);
+
+  // 🌟 STEP 2.5: KEYWORD INTEGRATION (if provided)
+  if (payload.keywords && payload.keywords.length > 0) {
+    console.log("🎯 User keywords detected:", payload.keywords);
+    const keywordEnhancement = `
+      Additional visual concepts: ${payload.keywords.join(', ')}
+      Style enhancement: Incorporate these visual elements into the artistic composition
+      Creative fusion: Blend these concepts with the extracted visual essence for enhanced artistic direction
+    `.trim();
+
+    abstractVisualEssence = `${abstractVisualEssence}
+
+    ${keywordEnhancement}`;
+    console.log("✨ Enhanced with user keywords - new length:", abstractVisualEssence.length);
+  }
+
   console.log("🎨 Abstract visual essence extracted:", abstractVisualEssence.substring(0, 200) + "...");
   
   // 🔥 STEP 3: 3-LAYER PROMPT ASSEMBLY

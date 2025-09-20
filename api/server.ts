@@ -849,13 +849,17 @@ app.post("/embed", async (req, res) => {
 // 3. 表紙画像生成エンドポイント
 app.post("/cover", async (req, res) => {
   try {
-    const { synopsis, title } = req.body;
+    const { synopsis, title, keywords } = req.body;
     
     if (!synopsis) {
       return res.status(400).json({ error: "synopsis is required" });
     }
 
     console.log("Cover generation requested for synopsis:", synopsis.substring(0, 200) + "...");
+
+    if (keywords && keywords.length > 0) {
+      console.log("🎯 User keywords provided:", keywords);
+    }
     
     // 🔥 MEGA ULTRA STRICT Cover Generation - サーバーサイド完全版
     console.log("🔥 MEGA ULTRA STRICT Cover Generation activated on server!");
@@ -899,12 +903,27 @@ app.post("/cover", async (req, res) => {
 text, words, letters, alphabets, characters, numbers, digits, symbols, punctuation, marks, titles, headings, captions, labels, tags, stickers, logos, brands, trademarks, signs, billboards, placards, books with visible text, magazines, newspapers, documents, subtitles, watermarks, credits, readable content, writing, script, fonts, calligraphy, typography, signage, lettering, inscriptions, annotations, Japanese text, English text, Chinese text, Korean text, Arabic text, any language text, license plates, street signs, store signs, building signs, neon signs, digital displays, screens with text, posters with text, banners with text, book spines with text, covers with text, newspapers, magazines with text, documents with text, handwriting, print text, digital text, carved text, painted text, embossed text, any readable symbols, mathematical symbols, currency symbols, trademark symbols, copyright symbols, hashtags, URLs, email addresses, phone numbers, dates in text form, brand names, company names, product names, location names, personal names, character names, place names, author names, publisher names, ISBN numbers, barcodes, QR codes`;
 
     // 🎨 3-LAYER PROMPT ASSEMBLY
+    let enhancedSynopsis = synopsis;
+
+    // 🌟 KEYWORD INTEGRATION (if provided)
+    if (keywords && keywords.length > 0) {
+      const keywordEnhancement = `
+
+🎯 Additional User-Specified Visual Concepts:
+${keywords.join(', ')}
+
+Style Enhancement Instructions: Incorporate these visual elements into the artistic composition while maintaining the narrative essence from the synopsis. Blend these concepts harmoniously with the extracted visual mood to create enhanced artistic direction.`;
+
+      enhancedSynopsis = `${synopsis}${keywordEnhancement}`;
+      console.log("✨ Enhanced synopsis with user keywords - total length:", enhancedSynopsis.length);
+    }
+
     const coverPrompt = `${SYSTEM_PROMPT}
 
 ${MAIN_CREATIVE_PROMPT}
 
 【Visual and Emotional Essence】
-${synopsis}
+${enhancedSynopsis}
 
 MEGA NEGATIVE PROHIBITION:
 ${MEGA_NEGATIVE_PROMPT}

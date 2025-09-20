@@ -1,6 +1,7 @@
 import { motion } from "framer-motion"
-import { X, ImageIcon, Download, Eye, Sparkles } from "lucide-react"
+import { X, ImageIcon, Download, Eye, Sparkles, Tag } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { useState, useEffect } from "react"
 
 interface CoverGenerationModalProps {
@@ -8,7 +9,7 @@ interface CoverGenerationModalProps {
   onClose: () => void
   isGenerating: boolean
   coverImageUrl: string | null
-  onGenerate: () => void
+  onGenerate: (keywords?: string[]) => void
   onComplete?: () => void
   novelTitle?: string
 }
@@ -26,6 +27,8 @@ export function CoverGenerationModal({
   const [progress, setProgress] = useState(0)
   const [imageLoadError, setImageLoadError] = useState<string | null>(null)
   const [imageLoadSuccess, setImageLoadSuccess] = useState(false)
+  const [regenerateKeywords, setRegenerateKeywords] = useState<string>("")
+  const [showKeywordInput, setShowKeywordInput] = useState(false)
 
   useEffect(() => {
     console.log("CoverGenerationModal - coverImageUrl変更:", coverImageUrl)
@@ -109,7 +112,7 @@ export function CoverGenerationModal({
                     AIが小説の内容を解析して、魅力的な表紙デザインを作成します
                   </p>
                   <Button
-                    onClick={onGenerate}
+                    onClick={() => onGenerate()}
                     className="text-white font-medium"
                     style={{
                       background: "linear-gradient(135deg, #8b6914 0%, #a0751f 50%, #b8860b 100%)"
@@ -299,42 +302,75 @@ export function CoverGenerationModal({
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t flex justify-end gap-3" style={{ borderColor: "rgba(218, 165, 32, 0.2)" }}>
-          <Button
-            variant="outline"
-            onClick={onClose}
-            disabled={isGenerating}
-            className="border-amber-600 text-amber-600 hover:bg-amber-50"
-          >
-            キャンセル
-          </Button>
+        <div className="border-t" style={{ borderColor: "rgba(218, 165, 32, 0.2)" }}>
+          {/* Keyword Input Section (only shown when cover exists) */}
           {coverImageUrl && !isGenerating && (
-            <>
-              <Button
-                onClick={onGenerate}
-                className="text-white font-medium"
-                style={{
-                  background: "linear-gradient(135deg, #8b6914 0%, #a0751f 50%, #b8860b 100%)"
-                }}
-              >
-                <Sparkles className="w-4 h-4 mr-2" />
-                再作成
-              </Button>
-              {onComplete && (
+            <div className="p-4 border-b" style={{ borderColor: "rgba(218, 165, 32, 0.1)", background: "rgba(218, 165, 32, 0.02)" }}>
+              <div className="flex items-center gap-2 mb-3">
+                <Tag className="w-4 h-4" style={{ color: "#daa520" }} />
+                <span className="text-sm font-medium" style={{ color: "#daa520" }}>
+                  再作成用キーワード（オプション）
+                </span>
+              </div>
+              <div className="flex gap-3">
+                <Input
+                  placeholder="例: 神秘的, 夕日, 金色の光, ファンタジー..."
+                  value={regenerateKeywords}
+                  onChange={(e) => setRegenerateKeywords(e.target.value)}
+                  className="flex-1 border-amber-300 focus:border-amber-500 focus:ring-amber-500"
+                  style={{
+                    background: "rgba(255, 255, 255, 0.9)",
+                    color: "#4a5568"
+                  }}
+                />
                 <Button
                   onClick={() => {
-                    onComplete()
+                    const keywords = regenerateKeywords
+                      .split(',')
+                      .map(k => k.trim())
+                      .filter(k => k.length > 0);
+                    onGenerate(keywords.length > 0 ? keywords : undefined);
+                    setRegenerateKeywords("");
                   }}
-                  className="text-white font-bold"
+                  className="text-white font-medium"
                   style={{
-                    background: "linear-gradient(135deg, #22c55e 0%, #16a34a 50%, #15803d 100%)"
+                    background: "linear-gradient(135deg, #8b6914 0%, #a0751f 50%, #b8860b 100%)"
                   }}
                 >
-                  ✅ 完了
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  再作成
                 </Button>
-              )}
-            </>
+              </div>
+              <p className="text-xs mt-2" style={{ color: "#8b7355" }}>
+                💡 複数のキーワードはカンマで区切ってください。空欄の場合は通常の再作成を実行します。
+              </p>
+            </div>
           )}
+
+          {/* Main Footer Actions */}
+          <div className="p-6 flex justify-end gap-3">
+            <Button
+              variant="outline"
+              onClick={onClose}
+              disabled={isGenerating}
+              className="border-amber-600 text-amber-600 hover:bg-amber-50"
+            >
+              キャンセル
+            </Button>
+            {coverImageUrl && !isGenerating && onComplete && (
+              <Button
+                onClick={() => {
+                  onComplete()
+                }}
+                className="text-white font-bold"
+                style={{
+                  background: "linear-gradient(135deg, #22c55e 0%, #16a34a 50%, #15803d 100%)"
+                }}
+              >
+                ✅ 完了
+              </Button>
+            )}
+          </div>
         </div>
       </motion.div>
     </div>
