@@ -866,41 +866,15 @@ app.post("/cover", async (req, res) => {
     console.log("🛡️ Title information completely blocked - only visual essence will be processed");
     
     // 🛡️ SYSTEM PROMPT - マスター抽象アーティスト設定
-    const SYSTEM_PROMPT = `You are a master abstract artist and wordless book cover designer. Your specialty is creating pure visual compositions without any textual elements. You communicate stories through color, light, form, and atmosphere alone. You never include text, letters, words, or readable symbols in your artwork. Think of yourself as creating a visual symphony that speaks to the soul without words.`;
+    const SYSTEM_PROMPT = `You are a book cover designer. Consider yourself an entity that creates covers without using any text or letters.`;
 
     // 🌟 MAIN CREATIVE PROMPT - ポジティブ創作指示
-    const MAIN_CREATIVE_PROMPT = `Create a stunning abstract book cover that captures the emotional essence through pure visual elements:
+    const MAIN_CREATIVE_PROMPT = `Create a book cover.
+Capture the essence using pure visual elements, without any text.
 
-🎨 ARTISTIC DIRECTION:
-- Paint like Monet capturing light and atmosphere
-- Use color relationships like Rothko expressing deep emotions  
-- Apply brushwork techniques of Turner for dramatic skies
-- Create compositional balance like Kandinsky's abstract works
-
-🌈 VISUAL ELEMENTS TO INCLUDE:
-- Flowing organic shapes and natural forms
-- Atmospheric lighting effects (golden hour, moonlight, dramatic shadows)
-- Emotional color temperature variations (warm/cool contrasts)
-- Textural elements (brush strokes, gradients, soft transitions)
-- Architectural silhouettes without any signage or text
-- Distant organic shapes suggesting life and movement
-- Impressionistic landscapes with dreamy qualities
-
-🎭 EMOTIONAL EXPRESSION:
-- Convert story mood into color harmonies
-- Express narrative tension through compositional balance
-- Translate themes into abstract visual metaphors
-- Create depth through layered atmospheric effects
-
-📐 TECHNICAL REQUIREMENTS:
-- Vertical book cover aspect ratio (3:4)
-- Professional artistic composition
-- High visual impact for book cover appeal
-- Sophisticated color palette suitable for literary works`;
-
-    // ⛔ MEGA NEGATIVE PROMPT - 完全禁止事項
-    const MEGA_NEGATIVE_PROMPT = `ABSOLUTELY FORBIDDEN - COMPLETE PROHIBITION:
-text, words, letters, alphabets, characters, numbers, digits, symbols, punctuation, marks, titles, headings, captions, labels, tags, stickers, logos, brands, trademarks, signs, billboards, placards, books with visible text, magazines, newspapers, documents, subtitles, watermarks, credits, readable content, writing, script, fonts, calligraphy, typography, signage, lettering, inscriptions, annotations, Japanese text, English text, Chinese text, Korean text, Arabic text, any language text, license plates, street signs, store signs, building signs, neon signs, digital displays, screens with text, posters with text, banners with text, book spines with text, covers with text, newspapers, magazines with text, documents with text, handwriting, print text, digital text, carved text, painted text, embossed text, any readable symbols, mathematical symbols, currency symbols, trademark symbols, copyright symbols, hashtags, URLs, email addresses, phone numbers, dates in text form, brand names, company names, product names, location names, personal names, character names, place names, author names, publisher names, ISBN numbers, barcodes, QR codes`;
+📐 Technical Requirements:
+Vertical aspect ratio suitable for a book cover (3:4)
+Strong visual impact appropriate for a book cover`;
 
     // 🎨 3-LAYER PROMPT ASSEMBLY
     let enhancedSynopsis = synopsis;
@@ -912,7 +886,7 @@ text, words, letters, alphabets, characters, numbers, digits, symbols, punctuati
 🎯 Additional User-Specified Visual Concepts:
 ${keywords.join(', ')}
 
-Style Enhancement Instructions: Incorporate these visual elements into the artistic composition while maintaining the narrative essence from the synopsis. Blend these concepts harmoniously with the extracted visual mood to create enhanced artistic direction.`;
+Style Enhancement Instructions: Incorporate these visual elements into the composition, while preserving the essence of the story.`;
 
       enhancedSynopsis = `${synopsis}${keywordEnhancement}`;
       console.log("✨ Enhanced synopsis with user keywords - total length:", enhancedSynopsis.length);
@@ -928,7 +902,7 @@ ${enhancedSynopsis}
 MEGA NEGATIVE PROHIBITION:
 ${MEGA_NEGATIVE_PROMPT}
 
-FINAL ABSOLUTE REQUIREMENT: Create a completely wordless, text-free artistic composition. No readable content of any kind.`;
+FINAL ABSOLUTE REQUIREMENT: Create a completely wordless, text-free artistic composition.`;
 
     try {
       // Try direct HTTP API call to Vertex AI first (working method)
@@ -969,19 +943,19 @@ FINAL ABSOLUTE REQUIREMENT: Create a completely wordless, text-free artistic com
           safety_settings: [
             {
               category: "HARM_CATEGORY_HARASSMENT",
-              threshold: "BLOCK_NONE"
+              threshold: "BLOCK_MEDIUM_AND_ABOVE"
             },
             {
               category: "HARM_CATEGORY_HATE_SPEECH", 
-              threshold: "BLOCK_NONE"
+              threshold: "BLOCK_MEDIUM_AND_ABOVE"
             },
             {
               category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-              threshold: "BLOCK_NONE"
+              threshold: "BLOCK_MEDIUM_AND_ABOVE"
             },
             {
               category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-              threshold: "BLOCK_NONE"
+              threshold: "BLOCK_MEDIUM_AND_ABOVE"
             }
           ]
         };
