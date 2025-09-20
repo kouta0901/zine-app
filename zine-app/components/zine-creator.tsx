@@ -92,7 +92,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
       id: "1",
       type: "ai",
       content:
-        "こんにちは！私はあなたの作品をレビューするAI作家です。文章の改善点や表現のアドバイスをお手伝いします。修正したい箇所を選択するか、直接ご相談ください。",
+        "こんにちは！私はあなたの作品をレビューするAI作家です。文章の改善点や表現のアドバイスをお手伝いします。\n\n💡 使い方：\n• テキストを選択 → 選択部分のみ修正\n• 選択なし → 小説全文を修正\n\nどのような修正をご希望ですか？",
       timestamp: new Date(),
     },
   ])
@@ -855,18 +855,6 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
 
     // 選択状態を保存
     const currentSelection = selectedText
-    
-    // テキストが選択されていない場合の処理
-    if (!currentSelection) {
-      const errorMessage: ChatMessage = {
-        id: Date.now().toString(),
-        type: "ai",
-        content: "修正したいテキストを選択してから指示を入力してください。",
-        timestamp: new Date(),
-      }
-      setReviewChatMessages((prev) => [...prev, errorMessage])
-      return
-    }
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -876,61 +864,87 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
     }
 
     setReviewChatMessages((prev) => [...prev, userMessage])
-    
+
     const inputContent = reviewChatInput
     setReviewChatInput("")
-    
+
     // Start loading
     setIsApplyingReview(true)
 
     try {
-      // Get selection position from DOM
-      const getSelectionPosition = () => {
-        if (typeof window === 'undefined') return { x: 100, y: 100, width: 200, height: 20 }
-        
-        const selection = window.getSelection()
-        if (selection && selection.rangeCount > 0) {
-          const range = selection.getRangeAt(0)
-          const rect = range.getBoundingClientRect()
-          return {
-            x: rect.left + window.scrollX,
-            y: rect.top + window.scrollY,
-            width: rect.width,
-            height: rect.height
-          }
-        }
-        return { x: 100, y: 100, width: 200, height: 20 }
+      // テキスト選択がない場合は小説全文を対象にする
+      const isFullNovel = !currentSelection
+      const targetText = currentSelection ? currentSelection.text : novelContent
+
+      // 対象テキストが存在しない場合のエラーハンドリング
+      if (!targetText) {
+        throw new Error("修正する小説がありません。まず小説を生成してください。")
       }
 
-      // review APIを使用してテキストを修正提案を生成
+      // review APIを使用してテキストを修正
       const result = await review({
-        original: currentSelection.text,
-        instruction: `以下の指示に従って、選択されたテキストを修正してください: ${inputContent}`
+        original: targetText,
+        instruction: isFullNovel
+          ? `小説全体に対して以下の指示を適用してください: ${inputContent}`
+          : `以下の指示に従って、選択されたテキストを修正してください: ${inputContent}`
       })
-      
-      // Create suggestion instead of applying directly
-      const suggestionId = Date.now().toString()
-      const newSuggestion: TextSuggestion = {
-        id: suggestionId,
-        originalText: currentSelection.text,
-        suggestedText: result.text,
-        position: getSelectionPosition(),
-        instruction: inputContent,
-        timestamp: new Date()
+
+      if (isFullNovel) {
+        // 小説全文を更新
+        setNovelContent(result.text)
+        const splitPages = splitNovelContent(result.text)
+        setNovelPages(splitPages)
+
+        const aiResponse = {
+          id: (Date.now() + 1).toString(),
+          type: "ai" as const,
+          content: `小説全体に「${inputContent}」の修正を適用しました。`,
+          timestamp: new Date(),
+        }
+        setReviewChatMessages((prev) => [...prev, aiResponse])
+      } else {
+        // Get selection position from DOM
+        const getSelectionPosition = () => {
+          if (typeof window === 'undefined') return { x: 100, y: 100, width: 200, height: 20 }
+
+          const selection = window.getSelection()
+          if (selection && selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0)
+            const rect = range.getBoundingClientRect()
+            return {
+              x: rect.left + window.scrollX,
+              y: rect.top + window.scrollY,
+              width: rect.width,
+              height: rect.height
+            }
+          }
+          return { x: 100, y: 100, width: 200, height: 20 }
+        }
+
+        // Create suggestion instead of applying directly (部分修正の場合)
+        const suggestionId = Date.now().toString()
+        const newSuggestion: TextSuggestion = {
+          id: suggestionId,
+          originalText: currentSelection.text,
+          suggestedText: result.text,
+          position: getSelectionPosition(),
+          instruction: inputContent,
+          timestamp: new Date()
+        }
+
+        // Add suggestion to state
+        setTextSuggestions((prev) => [...prev, newSuggestion])
+
+        const aiResponse = {
+          id: (Date.now() + 1).toString(),
+          type: "ai" as const,
+          content: `「${inputContent}」の指示に基づいて修正提案を作成しました。右側の吹き出しで確認してください。`,
+          timestamp: new Date(),
+        }
+
+        setReviewChatMessages((prev) => [...prev, aiResponse])
       }
-      
-      // Add suggestion to state
-      setTextSuggestions((prev) => [...prev, newSuggestion])
-      
-      const aiResponse = {
-        id: (Date.now() + 1).toString(),
-        type: "ai" as const,
-        content: `「${inputContent}」の指示に基づいて修正提案を作成しました。右側の吹き出しで確認してください。`,
-        timestamp: new Date(),
-      }
-      
-      setReviewChatMessages((prev) => [...prev, aiResponse])
-      
+
     } catch (error) {
       console.error("レビュー修正エラー:", error)
       const errorResponse = {
@@ -1116,7 +1130,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
               value={reviewChatInput}
               onChange={(e) => setReviewChatInput(e.target.value)}
               onKeyPress={(e) => e.key === "Enter" && handleReviewChatSend()}
-              placeholder="修正したい箇所や相談内容を入力..."
+              placeholder="修正指示を入力（テキスト選択なしで全文修正）..."
               className="flex-1 border rounded-lg px-3 py-2"
               style={{
                 background: "rgba(255, 253, 250, 0.8)",
