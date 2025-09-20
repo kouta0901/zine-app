@@ -576,10 +576,15 @@ export async function healthCheck(): Promise<{ ok: boolean; timestamp: string }>
 
 // ZINE保存・管理機能
 
-// ZINE保存
+// ZINE新規保存 (新規作成専用 - 既存作品の更新はupdateZineを使用)
 export async function saveZine(zineData: any): Promise<{ id: string; message: string }> {
   try {
-    // Save to API server
+    // Note: zineData should NOT contain an ID for new works
+    if (zineData.id) {
+      console.warn('⚠️ saveZine called with existing ID - consider using updateZine instead')
+    }
+
+    // Save to API server as new work
     const result = await apiCall("/zines", zineData);
     
     // Also save to localStorage for local access (client-side only)
@@ -643,21 +648,46 @@ export async function getZine(id: string): Promise<any> {
   return response.json();
 }
 
-// ZINE更新
+// ZINE更新 (既存作品の更新専用)
 export async function updateZine(id: string, zineData: any): Promise<{ id: string; message: string }> {
-  const response = await fetch(`${API_BASE}/zines/${id}`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(zineData),
-  });
+  try {
+    console.log(`🔄 Updating ZINE: ${id}`)
 
-  if (!response.ok) {
-    throw new Error(`Failed to update ZINE: ${response.statusText}`);
+    const response = await fetch(`${API_BASE}/zines/${id}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(zineData),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to update ZINE: ${response.statusText}`);
+    }
+
+    const result = await response.json();
+
+    // Also update localStorage if available (client-side only)
+    if (typeof window !== 'undefined') {
+      const localData = {
+        ...zineData,
+        id: id,
+        lastModified: new Date().toISOString(),
+        type: 'zine'
+      };
+
+      localStorage.setItem(`zine_${id}`, JSON.stringify(localData));
+
+      // Trigger storage event for other components
+      window.dispatchEvent(new Event('storage'));
+      window.dispatchEvent(new Event('localStorageUpdate'));
+    }
+
+    return result;
+  } catch (error) {
+    console.error(`Failed to update ZINE ${id}:`, error);
+    throw error;
   }
-
-  return response.json();
 }
 
 // ZINE削除

@@ -25,7 +25,7 @@ import {
   Plus,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { novelizeWithImagesEnhanced, saveZine, review, generateCover } from "@/lib/api"
+import { novelizeWithImagesEnhanced, saveZine, updateZine, review, generateCover } from "@/lib/api"
 import { ocrService } from "@/lib/ocr"
 import { imageCaptioningService } from "@/lib/captioning"
 import SpatialAnalysisService from "@/lib/spatial-analysis"
@@ -52,6 +52,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
   const canvasRef = useRef<ZineCanvasHandle>(null)
   const [currentMode, setCurrentMode] = useState<"zine" | "novel">("zine")
   const [zineTitle, setZineTitle] = useState("")
+  const [existingWorkId, setExistingWorkId] = useState<string | null>(null) // Track existing work ID
   const [currentPageIndex, setCurrentPageIndex] = useState(0)
   const [selectedElement, setSelectedElement] = useState<string | null>(null)
   const [editingElement, setEditingElement] = useState<string | null>(null)
@@ -131,6 +132,13 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
     if (initialData) {
       console.log('📂 Restoring existing work data:', initialData.title)
       console.log('🔍 Restoring mode:', initialData.currentMode || 'zine')
+      console.log('🆔 Existing work ID:', initialData.id)
+
+      // 既存作品のIDを設定
+      if (initialData.id) {
+        setExistingWorkId(initialData.id)
+        console.log('🎯 Set existing work ID:', initialData.id)
+      }
 
       // タイトルを復元
       if (initialData.title) {
@@ -180,6 +188,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
       console.log('🆕 New work creation - using default zine mode')
       setCurrentMode("zine")
       setZineTitle("")
+      setExistingWorkId(null) // Clear existing work ID for new creation
       setPages([{ id: "page1", elements: [], title: "Page 1-2" }])
       setNovelContent("")
       setNovelPages([])
@@ -2177,6 +2186,14 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
     }
 
     setIsSaving(true)
+
+    // 既存作品か新規作品かを判定
+    const isExistingWork = existingWorkId !== null && existingWorkId !== undefined
+    console.log(`🎯 Save operation: ${isExistingWork ? 'UPDATE existing work' : 'CREATE new work'}`)
+    if (isExistingWork) {
+      console.log(`📝 Existing work ID: ${existingWorkId}`)
+    }
+
     try {
       // 🔥 完成度に基づいてステータスを決定
       const isComplete = isWorkComplete()
@@ -2207,6 +2224,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
       }))
 
       const zineData = {
+        ...(isExistingWork && { id: existingWorkId }), // Include ID only for existing works
         title: zineTitle || "無題のZINE",
         status: workStatus, // 🔥 完成度に基づいて "published" または "draft"
         isComplete: isComplete, // 🔥 完成フラグを追加
@@ -2229,13 +2247,29 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
         console.warn(`⚠️ Large ZINE data detected: ${(dataSize / 1024 / 1024).toFixed(2)} MB`)
       }
 
-      const result = await saveZine(zineData)
-
-      // 🔥 完成度に応じてメッセージを変更
-      if (isComplete) {
-        alert(`✅ 作品が完成し、My Booksに追加されました！\nタイトル: ${zineData.title}\nID: ${result.id}`)
+      // 既存/新規に応じてAPIを使い分け
+      let result
+      if (isExistingWork && existingWorkId) {
+        console.log(`🔄 Updating existing work: ${existingWorkId}`)
+        result = await updateZine(existingWorkId, zineData)
+        console.log(`✅ Work updated successfully: ${result.id}`)
       } else {
-        alert(`📝 作品が下書きとして保存されました。\n完成させるには${currentMode === "novel" ? "小説内容と表紙" : "ページ内容と表紙"}の両方が必要です。\nID: ${result.id}`)
+        console.log(`🆕 Creating new work`)
+        result = await saveZine(zineData)
+        console.log(`✅ New work created: ${result.id}`)
+
+        // 新規作成時は作成されたIDを記録
+        setExistingWorkId(result.id)
+      }
+
+      // 🔥 完成度と操作種別に応じてメッセージを変更
+      const operationType = isExistingWork ? "更新" : "保存"
+      const operationEmoji = isExistingWork ? "🔄" : "💾"
+
+      if (isComplete) {
+        alert(`✅ 作品が完成し、My Booksに${isExistingWork ? "更新されました" : "追加されました"}！\n${operationEmoji} 操作: ${operationType}\nタイトル: ${zineData.title}\nID: ${result.id}`)
+      } else {
+        alert(`📝 作品が下書きとして${operationType}されました。\n${operationEmoji} 操作: ${operationType}\n完成させるには${currentMode === "novel" ? "小説内容と表紙" : "ページ内容と表紙"}の両方が必要です。\nID: ${result.id}`)
       }
 
       // 📚 Published Booksの更新を通知
@@ -2244,8 +2278,9 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
         onPublishedBooksUpdate()
       }
     } catch (error) {
-      console.error("保存エラー:", error)
-      alert("ZINEの保存に失敗しました。もう一度お試しください。")
+      const operationType = isExistingWork ? "更新" : "保存"
+      console.error(`${operationType}エラー:`, error)
+      alert(`ZINEの${operationType}に失敗しました。もう一度お試しください。\n${isExistingWork ? "既存作品ID: " + existingWorkId : "新規作品作成"}`)
     } finally {
       setIsSaving(false)
     }
