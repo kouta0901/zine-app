@@ -865,44 +865,117 @@ app.post("/cover", async (req, res) => {
     console.log("🔥 MEGA ULTRA STRICT Cover Generation activated on server!");
     console.log("🛡️ Title information completely blocked - only visual essence will be processed");
     
-    // 🛡️ SYSTEM PROMPT - マスター抽象アーティスト設定
-    const SYSTEM_PROMPT = `You are a book cover designer. Consider yourself an entity that creates covers without using any text or letters.`;
+    // 🎨 ENHANCED CONCRETE VISUAL PROCESSING
+    console.log("🎨 Processing story content for concrete visual representation...");
 
-    // 🌟 MAIN CREATIVE PROMPT - ポジティブ創作指示
-    const MAIN_CREATIVE_PROMPT = `Create a book cover.
-Capture the essence using pure visual elements, without any text.
+    // 📚 Genre Detection and Visual Style Assignment
+    const detectGenre = (content: string, title?: string): string => {
+      const allText = `${title || ''} ${content}`.toLowerCase();
 
-📐 Technical Requirements:
-Vertical aspect ratio suitable for a book cover (3:4)
-Strong visual impact appropriate for a book cover`;
+      if (allText.match(/(sci-fi|science fiction|未来|宇宙|ロボット|テクノロジー|異世界|sf)/)) {
+        return "sci-fi";
+      } else if (allText.match(/(fantasy|ファンタジー|魔法|魔王|勇者|冒険|剣|魔術)/)) {
+        return "fantasy";
+      } else if (allText.match(/(romance|恋愛|愛|恋|カップル|結婚|デート)/)) {
+        return "romance";
+      } else if (allText.match(/(mystery|ミステリー|探偵|事件|犯罪|推理|殺人)/)) {
+        return "mystery";
+      } else if (allText.match(/(horror|ホラー|恐怖|幽霊|怪物|血|死)/)) {
+        return "horror";
+      } else {
+        return "general";
+      }
+    };
 
-    // 🎨 3-LAYER PROMPT ASSEMBLY
-    let enhancedSynopsis = synopsis;
+    const genre = detectGenre(synopsis, title);
+    console.log("📖 Detected genre:", genre);
 
-    // 🌟 KEYWORD INTEGRATION (if provided)
+    // 🎨 Genre-Specific Visual Styles
+    const getVisualStyle = (detectedGenre: string): string => {
+      const styles: { [key: string]: string } = {
+        "sci-fi": "futuristic technology, neon lights, sleek metallic surfaces, space environments, cyberpunk aesthetics, holographic effects",
+        "fantasy": "mystical landscapes, magical creatures, enchanted forests, ancient castles, ethereal lighting, medieval elements",
+        "romance": "warm romantic atmosphere, soft lighting, intimate settings, elegant compositions, dreamy colors, emotional depth",
+        "mystery": "dark atmospheric mood, shadowy figures, noir lighting, urban environments, suspenseful composition",
+        "horror": "dark and eerie atmosphere, dramatic shadows, ominous environments, gothic elements, tension-building composition",
+        "general": "balanced composition, natural lighting, realistic environments, versatile artistic style"
+      };
+      return styles[detectedGenre] || styles.general;
+    };
+
+    // 🌈 Extract Visual Elements from Synopsis
+    const extractVisualElements = (content: string): string => {
+      const visualTerms: string[] = [];
+
+      // Nature elements
+      if (content.match(/(海|ocean|sea|beach)/i)) visualTerms.push("ocean coastline with waves");
+      if (content.match(/(山|mountain|hill)/i)) visualTerms.push("mountain landscape");
+      if (content.match(/(森|forest|woods|tree)/i)) visualTerms.push("lush forest scenery");
+      if (content.match(/(空|sky|cloud)/i)) visualTerms.push("dramatic sky with clouds");
+      if (content.match(/(夜|night|moon|star)/i)) visualTerms.push("night sky with celestial elements");
+      if (content.match(/(朝|morning|sunrise|dawn)/i)) visualTerms.push("golden morning light");
+      if (content.match(/(夕|sunset|evening)/i)) visualTerms.push("warm sunset atmosphere");
+
+      // Urban elements
+      if (content.match(/(街|city|urban|building)/i)) visualTerms.push("modern city architecture");
+      if (content.match(/(駅|station|train)/i)) visualTerms.push("transportation hub atmosphere");
+      if (content.match(/(学校|school|university)/i)) visualTerms.push("academic institution setting");
+
+      // Emotional atmosphere
+      if (content.match(/(平和|peaceful|calm|tranquil)/i)) visualTerms.push("serene and peaceful atmosphere");
+      if (content.match(/(緊張|tension|dramatic|intense)/i)) visualTerms.push("dynamic and intense composition");
+      if (content.match(/(美し|beautiful|elegant|graceful)/i)) visualTerms.push("aesthetically beautiful elements");
+      if (content.match(/(暗|dark|shadow|mysterious)/i)) visualTerms.push("dramatic shadows and contrast");
+
+      return visualTerms.length > 0 ? visualTerms.slice(0, 3).join(", ") : "atmospheric visual storytelling";
+    };
+
+    // 🎨 Build Concrete Visual Prompt
+    const visualStyle = getVisualStyle(genre);
+    const visualElements = extractVisualElements(synopsis);
+
+    // 🌟 KEYWORD INTEGRATION
+    let additionalElements = "";
     if (keywords && keywords.length > 0) {
-      const keywordEnhancement = `
-
-🎯 Additional User-Specified Visual Concepts:
-${keywords.join(', ')}
-
-Style Enhancement Instructions: Incorporate these visual elements into the composition, while preserving the essence of the story.`;
-
-      enhancedSynopsis = `${synopsis}${keywordEnhancement}`;
-      console.log("✨ Enhanced synopsis with user keywords - total length:", enhancedSynopsis.length);
+      additionalElements = `, incorporating elements: ${keywords.join(', ')}`;
+      console.log("✨ User keywords integrated:", keywords);
     }
 
-    const coverPrompt = `${SYSTEM_PROMPT}
+    // 🎨 ULTRA CONCRETE VISUAL PROMPT
+    const coverPrompt = `Create a realistic, detailed book cover illustration with these exact specifications:
 
-${MAIN_CREATIVE_PROMPT}
+GENRE: ${genre.toUpperCase()}
+VISUAL STYLE: ${visualStyle}
+SPECIFIC ELEMENTS: ${visualElements}${additionalElements}
 
-【Visual and Emotional Essence】
-${enhancedSynopsis}
+MANDATORY VISUAL REQUIREMENTS:
+- Photo-realistic illustration style (NOT abstract art)
+- 3:4 vertical book cover format
+- Cinematic composition with dramatic lighting
+- Rich textures and realistic materials
+- Clear depth of field with focused foreground
+- Professional book cover aesthetic
 
-MEGA NEGATIVE PROHIBITION:
-${MEGA_NEGATIVE_PROMPT}
+CONCRETE VISUAL DETAILS TO INCLUDE:
+- Realistic human characters if story involves people
+- Actual environments and landscapes (not symbols)
+- Specific objects mentioned in the story
+- Realistic lighting conditions (dawn/dusk/night/day)
+- Detailed backgrounds with architectural or natural elements
+- Vivid, saturated colors appropriate to the mood
 
-FINAL ABSOLUTE REQUIREMENT: Create a completely wordless, text-free artistic composition.`;
+STORY CONTEXT FOR VISUAL REFERENCE:
+"${synopsis.substring(0, 400)}${synopsis.length > 400 ? '...' : ''}"
+
+STRICT CREATIVE DIRECTION:
+- Show real places, people, and objects
+- Use concrete imagery over symbolic representation
+- Focus on specific visual details that tell the story
+- Create a movie poster aesthetic with realistic elements
+- Avoid geometric shapes, abstract patterns, or artistic symbols
+- Render everything with photographic realism
+
+ABSOLUTE PROHIBITION: No text, words, letters, or readable symbols anywhere in the image.`;
 
     try {
       // Try direct HTTP API call to Vertex AI first (working method)
@@ -961,10 +1034,9 @@ FINAL ABSOLUTE REQUIREMENT: Create a completely wordless, text-free artistic com
         };
         
         console.log("Making direct API call to:", apiUrl);
-        console.log("🔍 MEGA ULTRA STRICT Prompt Analysis:");
-        console.log("  - System Prompt length:", SYSTEM_PROMPT.length);
-        console.log("  - Main Prompt length:", MAIN_CREATIVE_PROMPT.length);  
-        console.log("  - Negative Prompt length:", MEGA_NEGATIVE_PROMPT.length);
+        console.log("🔍 Concrete Visual Processing Analysis:");
+        console.log("  - Detected Genre:", genre);
+        console.log("  - Visual Elements:", visualElements);
         console.log("  - Synopsis length:", synopsis.length);
         console.log("  - Final Prompt length:", coverPrompt.length);
         console.log("🚀 Sending MEGA ULTRA STRICT payload to Vertex AI...");
