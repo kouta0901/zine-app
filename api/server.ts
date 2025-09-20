@@ -1015,6 +1015,16 @@ FINAL ABSOLUTE REQUIREMENT: Create a completely wordless, text-free artistic com
             statusText: response.statusText,
             body: errorText
           });
+
+          // レート制限エラーの場合、より分かりやすいエラーメッセージを返す
+          if (response.status === 429) {
+            return res.status(429).json({
+              error: "API利用制限に達しました。数分後に再度お試しください。",
+              code: "RATE_LIMIT_EXCEEDED",
+              retryAfter: 60 // 60秒後に再試行を推奨
+            });
+          }
+
           throw new Error(`Direct API call failed: ${response.status} ${response.statusText}\n${errorText}`);
         }
         

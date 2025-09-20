@@ -2286,13 +2286,23 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
         stack: errorStack
       })
 
-      // Enhanced error message with debugging info
-      alert(`表紙画像の生成に失敗しました。
+      // レート制限エラーの特別なハンドリング
+      if (errorMessage.includes("API利用制限") || errorMessage.includes("429")) {
+        alert(`⏰ API利用制限に達しました
+
+現在、表紙生成APIの利用制限に達しています。
+少し時間をおいてから再度お試しください。
+
+💡 ヒント: 短時間での連続生成を避けると、より安定してご利用いただけます。`)
+      } else {
+        // その他のエラー
+        alert(`表紙画像の生成に失敗しました。
 
 ULTRA_STRICTモードでの生成中にエラーが発生しました。
 エラー: ${errorMessage}
 
 もう一度お試しいただくか、サポートまでお問い合わせください。`)
+      }
     } finally {
       setIsGeneratingCover(false)
       console.log("🏁 Cover generation process completed.")

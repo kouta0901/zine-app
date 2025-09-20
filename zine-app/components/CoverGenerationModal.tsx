@@ -113,13 +113,16 @@ export function CoverGenerationModal({
                   </p>
                   <Button
                     onClick={() => onGenerate()}
-                    className="text-white font-medium"
+                    disabled={isGenerating}
+                    className="text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                     style={{
-                      background: "linear-gradient(135deg, #8b6914 0%, #a0751f 50%, #b8860b 100%)"
+                      background: isGenerating
+                        ? "linear-gradient(135deg, #6b5c13 0%, #7a6118 50%, #8b6914 100%)"
+                        : "linear-gradient(135deg, #8b6914 0%, #a0751f 50%, #b8860b 100%)"
                     }}
                   >
                     <Sparkles className="w-4 h-4 mr-2" />
-                    表紙を生成
+                    {isGenerating ? "生成中..." : "表紙を生成"}
                   </Button>
                 </motion.div>
               )}
@@ -332,13 +335,16 @@ export function CoverGenerationModal({
                     onGenerate(keywords.length > 0 ? keywords : undefined);
                     setRegenerateKeywords("");
                   }}
-                  className="text-white font-medium"
+                  disabled={isGenerating}
+                  className="text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{
-                    background: "linear-gradient(135deg, #8b6914 0%, #a0751f 50%, #b8860b 100%)"
+                    background: isGenerating
+                      ? "linear-gradient(135deg, #6b5c13 0%, #7a6118 50%, #8b6914 100%)"
+                      : "linear-gradient(135deg, #8b6914 0%, #a0751f 50%, #b8860b 100%)"
                   }}
                 >
                   <Sparkles className="w-4 h-4 mr-2" />
-                  再作成
+                  {isGenerating ? "生成中..." : "再作成"}
                 </Button>
               </div>
               <p className="text-xs mt-2" style={{ color: "#8b7355" }}>
