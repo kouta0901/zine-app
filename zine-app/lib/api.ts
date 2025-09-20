@@ -194,52 +194,22 @@ Begin the novel now, ensuring every image element is faithfully represented in y
 // 🔥 MEGA ULTRA STRICT PROMPT - 3層分離システム
 
 // 🎯 LAYER 1: SYSTEM PROMPT - AI の基本身分設定
-const SYSTEM_PROMPT = `You are a master abstract artist and wordless book cover designer. Your specialty is creating pure visual compositions without any textual elements. You communicate stories through color, light, form, and atmosphere alone. You never include text, letters, words, or readable symbols in your artwork. Think of yourself as creating a visual symphony that speaks to the soul without words.`;
+const SYSTEM_PROMPT = `You are a book cover designer. Consider yourself an entity that creates covers without using any text or letters.`;
 
 // 🌟 LAYER 2: MAIN CREATIVE PROMPT - ポジティブ創作指示
-const MAIN_CREATIVE_PROMPT = `Create a stunning abstract book cover that captures the emotional essence through pure visual elements:
+const MAIN_CREATIVE_PROMPT = `Create a book cover.
+Capture the essence using pure visual elements, without any text.
 
-🎨 ARTISTIC DIRECTION:
-- Paint like Monet capturing light and atmosphere
-- Use color relationships like Rothko expressing deep emotions  
-- Apply brushwork techniques of Turner for dramatic skies
-- Create compositional balance like Kandinsky's abstract works
-
-🌈 VISUAL ELEMENTS TO INCLUDE:
-- Flowing organic shapes and natural forms
-- Atmospheric lighting effects (golden hour, moonlight, dramatic shadows)
-- Emotional color temperature variations (warm/cool contrasts)
-- Textural elements (brush strokes, gradients, soft transitions)
-- Architectural silhouettes without any signage or text
-- Distant organic shapes suggesting life and movement
-- Impressionistic landscapes with dreamy qualities
-
-🎭 EMOTIONAL EXPRESSION:
-- Convert story mood into color harmonies
-- Express narrative tension through compositional balance
-- Translate themes into abstract visual metaphors
-- Create depth through layered atmospheric effects
-
-📐 TECHNICAL REQUIREMENTS:
-- Vertical book cover aspect ratio (3:4)
-- Professional artistic composition
-- High visual impact for book cover appeal
-- Sophisticated color palette suitable for literary works`;
+📐 Technical Requirements:
+Vertical aspect ratio suitable for a book cover (3:4)
+Strong visual impact appropriate for a book cover`;
 
 // ⛔ LAYER 3: NEGATIVE PROMPT - 完全禁止事項
 const MEGA_NEGATIVE_PROMPT = `ABSOLUTELY FORBIDDEN - COMPLETE PROHIBITION:
 text, words, letters, alphabets, characters, numbers, digits, symbols, punctuation, marks, titles, headings, captions, labels, tags, stickers, logos, brands, trademarks, signs, billboards, placards, books with visible text, magazines, newspapers, documents, subtitles, watermarks, credits, readable content, writing, script, fonts, calligraphy, typography, signage, lettering, inscriptions, annotations, Japanese text, English text, Chinese text, Korean text, Arabic text, any language text, license plates, street signs, store signs, building signs, neon signs, digital displays, screens with text, posters with text, banners with text, book spines with text, covers with text, newspapers, magazines with text, documents with text, handwriting, print text, digital text, carved text, painted text, embossed text, any readable symbols, mathematical symbols, currency symbols, trademark symbols, copyright symbols, hashtags, URLs, email addresses, phone numbers, dates in text form, brand names, company names, product names, location names, personal names, character names, place names, author names, publisher names, ISBN numbers, barcodes, QR codes`;
 
 // 🎨 ARTISTIC STYLE ENHANCEMENT PROMPT
-const ARTISTIC_STYLE_PROMPT = `Style Reference: Create this artwork as if you were:
-- Claude Monet painting his famous Water Lilies series - pure color and light
-- Mark Rothko creating his Color Field paintings - emotional color relationships  
-- J.M.W. Turner capturing dramatic atmospheric effects - light breaking through mist
-- Wassily Kandinsky composing abstract visual music - pure form and color harmony
-- Georgia O'Keeffe painting organic forms - natural abstractions
-- Hiroshi Yoshida creating atmospheric landscapes - subtle color gradations
-
-The result should be a wordless visual poem that speaks directly to the emotions through pure artistic expression.`;
+const ARTISTIC_STYLE_PROMPT = ``;
 
 // 🛡️ CONSERVATIVE TITLE CLEANER - 画像由来コンテンツ保護版
 function megaTitleBlocker(content: string): string {
@@ -318,9 +288,7 @@ function convertToAbstractArt(visualContent: string): string {
   // 🌟 最終抽象化処理
   const finalAbstract = `
     Abstract artistic essence: ${abstractContent}
-    Visual interpretation: Transform these concepts into pure color relationships and compositional balance
-    Atmospheric rendering: Express through light, shadow, and emotional color temperature without any textual elements
-    Style direction: Like a wordless symphony painted in colors - conveying meaning through pure visual harmony
+    Transform these concepts into a book cover image.
   `.replace(/\s+/g, ' ').trim();
   
   console.log("✨ Abstract art conversion completed");
@@ -391,10 +359,91 @@ function extractEnhancedVisualSummary(novelText: string): string {
   const visualContent = meaningfulLines.slice(0, 6).join(' ');
   const abstractArtDescription = convertToAbstractArt(visualContent);
   
-  // 🆘 Fallback for extreme cases
+  // 🔍 Enhanced keyword extraction for insufficient content
   if (abstractArtDescription.length < 50) {
-    console.log("🆘 Activating fallback abstract description");
-    return "Abstract visual essence: Ethereal atmospheric composition with soft color transitions. Organic forms dissolved into pure emotional color harmonies. Impressionistic landscape suggesting infinite space through graduated light and shadow. Wordless visual poetry expressed in gentle color relationships.";
+    console.log("🔍 Insufficient visual content detected, extracting more keywords from novel...");
+    
+    // 📚 より多くのキーワードカテゴリを追加
+    const expandedKeywords = [
+      // 既存のキーワード
+      ...visualKeywords,
+      ...emotionalKeywords,
+      // 追加の視覚的キーワード
+      '光', '影', '明るさ', '暗さ', '色合い', '色彩', '質感', '質感感', '表面', '肌理',
+      '形', '形状', '輪郭', 'シルエット', 'フォルム', '構造', 'デザイン', '模様', 'パターン',
+      '動き', '動き感', '流れ', 'リズム', 'テンポ', 'リズム感', '躍動感', '静寂感',
+      '空間', '広がり', '奥行き', '深さ', '距離', '近さ', '遠さ', '位置', '配置',
+      '雰囲気', 'ムード', '空気感', '気配', '印象', '感じ', '感覚', '感触',
+      // 具体的な物体
+      '物', '物体', 'アイテム', '道具', '装飾', '飾り', 'アクセサリー', '小物',
+      '家具', '机', '椅子', 'ベッド', '本', '書物', '紙', '写真', '絵', '画像',
+      // 自然現象
+      '現象', '出来事', '変化', '移り変わり', '推移', '進行', '発展', '展開',
+      '音', '響き', '音色', '音感', '静寂', '無音', '騒音', '音楽', 'メロディー',
+      // 時間の流れ
+      '瞬間', '一瞬', '刹那', '永遠', '持続', '継続', '変化', '変遷', '歴史',
+      // 感情の詳細
+      '心', '心の動き', '内面', '内なる', '深層', '潜在', '無意識', '意識',
+      '記憶', '思い出', '追憶', '回想', '懐かしさ', '郷愁', 'ノスタルジー',
+      // 行動・動作
+      '動作', '仕草', '身振り', '手振り', '表情', '眼差し', '視線', '見つめる',
+      '歩く', '走る', '座る', '立つ', '寝る', '起きる', '動く', '止まる',
+      // 関係性
+      '関係', '繋がり', '結びつき', '絆', '距離感', '親近感', '疎遠感', '隔たり'
+    ];
+    
+    // 🔍 より緩い条件で追加抽出
+    const additionalLines = lines.filter(line => {
+      // 基本的な除外条件のみ適用
+      if (line.match(/^(タイトル|概要|設定|ジャンル|キャラクター|登場人物|あらすじ|シナリオ|Chapter|第.章|Scene|場面)[:：]/i)) {
+        return false;
+      }
+      
+      // 会話は除外
+      if (line.includes('「') || line.includes('』') || line.includes('"') || line.includes('『') || line.includes('』')) {
+        return false;
+      }
+      
+      // タイトル関連は除外
+      if (line.includes('新道') || line.includes('タイル') || line.includes('ZINE') || 
+          line.includes('振動タイル') || line.includes('振動') || line.includes('小説タイトル')) {
+        return false;
+      }
+      
+      // より多くのキーワードにマッチする行を抽出
+      return expandedKeywords.some(keyword => line.includes(keyword));
+    });
+    
+    // 📝 抽出された内容を結合
+    const enhancedContent = [...meaningfulLines, ...additionalLines.slice(0, 10)].join(' ');
+    const enhancedAbstract = convertToAbstractArt(enhancedContent);
+    
+    console.log(`🔍 Enhanced extraction: ${meaningfulLines.length} + ${additionalLines.length} lines`);
+    console.log(`📊 Enhanced content length: ${enhancedAbstract.length} characters`);
+    
+    // それでも不十分な場合は、小説全体から重要な単語を抽出
+    if (enhancedAbstract.length < 50) {
+      console.log("🔍 Still insufficient, extracting key words from entire novel...");
+      
+      // 小説全体から重要な単語を抽出（名詞、形容詞、動詞）
+      const allWords = titleBlockedContent
+        .replace(/[「」『』""''（）()【】\[\]！!？?。、,]/g, ' ')
+        .split(/\s+/)
+        .filter(word => word.length > 1)
+        .filter(word => !word.match(/^[0-9０-９]+$/)) // 数字のみ除外
+        .filter(word => !word.match(/^[a-zA-Z]+$/)) // 英字のみ除外
+        .slice(0, 50); // 最初の50語を取得
+      
+      const wordBasedContent = allWords.join(' ');
+      const wordBasedAbstract = convertToAbstractArt(wordBasedContent);
+      
+      console.log(`📝 Word-based extraction: ${allWords.length} words`);
+      console.log(`📊 Word-based content length: ${wordBasedAbstract.length} characters`);
+      
+      return wordBasedAbstract;
+    }
+    
+    return enhancedAbstract;
   }
   
   console.log("✅ MEGA ENHANCED extraction completed:", abstractArtDescription);
