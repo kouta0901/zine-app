@@ -326,14 +326,15 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
     }
   }
 
-  // テキスト分割機能（小説モード用）
+  // テキスト分割機能（小説モード用）- 最適化版
   const splitNovelContent = (content: string): string[] => {
     if (!content.trim()) return []
-    
-    // 固定サイズに正確に収まる文字数を計算
-    // 実効高さ570px ÷ (フォント16px × 行間2.2) ÷ 2ページ = 約8行/ページ
-    // 1行約25文字 × 8行 = 約200文字/ページ（両ページで400文字）
-    const CHARS_PER_PAGE = 400 // 固定画面サイズにピッタリ収まる文字数
+
+    // 動的文字数計算 - 実際の表示領域に基づく最適化
+    // NovelViewer の表示領域: px-12 py-20 h-full
+    // フォント: 16px, 行間: 2.2, 実効高さ: 約600px
+    // 1行: 約30文字 × 約18行 = 540文字/ページ × 2倍マージン = 約1080文字
+    const CHARS_PER_PAGE = 1080 // 動的最適化: 実際の表示領域に正確に対応
     
     const paragraphs = content.split('\n\n')
     const pages: string[] = []
@@ -341,14 +342,33 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
     
     for (const paragraph of paragraphs) {
       const paragraphWithBreak = paragraph + '\n\n'
-      
+
+      // 段落がページ制限を超える場合の改良ロジック
       if (currentPage.length + paragraphWithBreak.length <= CHARS_PER_PAGE) {
         currentPage += paragraphWithBreak
       } else {
+        // 現在のページが空でない場合のみページを追加（段落の途中で分割を避ける）
         if (currentPage.trim()) {
           pages.push(currentPage.trim())
+          currentPage = paragraphWithBreak
+        } else {
+          // 現在のページが空の場合は長い段落を文単位で分割
+          const sentences = paragraph.split('。')
+          let tempPage = currentPage
+
+          for (let i = 0; i < sentences.length; i++) {
+            const sentence = sentences[i] + (i < sentences.length - 1 ? '。' : '')
+            if (tempPage.length + sentence.length <= CHARS_PER_PAGE) {
+              tempPage += sentence
+            } else {
+              if (tempPage.trim()) {
+                pages.push(tempPage.trim())
+              }
+              tempPage = sentence
+            }
+          }
+          currentPage = tempPage + '\n\n'
         }
-        currentPage = paragraphWithBreak
       }
     }
     
@@ -356,42 +376,45 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
       pages.push(currentPage.trim())
     }
     
-    // 最低5ページを保証する
-    const MIN_PAGES = 5
-    if (pages.length < MIN_PAGES && pages.length > 0) {
-      // 現在のページ数が5未満の場合、文字数を減らして再分割
-      const ADJUSTED_CHARS_PER_PAGE = Math.floor(content.length / MIN_PAGES)
-      
-      // 再分割処理
-      const adjustedPages: string[] = []
-      let adjustedCurrentPage = ""
-      
-      for (const paragraph of content.split('\n\n')) {
-        const paragraphWithBreak = paragraph + '\n\n'
-        
-        if (adjustedCurrentPage.length + paragraphWithBreak.length <= ADJUSTED_CHARS_PER_PAGE) {
-          adjustedCurrentPage += paragraphWithBreak
-        } else {
-          if (adjustedCurrentPage.trim()) {
-            adjustedPages.push(adjustedCurrentPage.trim())
-          }
-          adjustedCurrentPage = paragraphWithBreak
+    // 最終的なページバランス調整 - 両ページの表示品質向上
+    const balancedPages = balancePageContent(pages)
+
+    return balancedPages.length > 0 ? balancedPages : [content]
+  }
+
+  // ページバランス調整関数 - 両ページの文字数を均等に
+  const balancePageContent = (pages: string[]): string[] => {
+    if (pages.length <= 1) return pages
+
+    const balanced: string[] = []
+
+    for (let i = 0; i < pages.length; i += 2) {
+      const leftPage = pages[i] || ""
+      const rightPage = pages[i + 1] || ""
+
+      // 左ページが極端に短く、右ページが存在する場合の調整
+      if (leftPage.length < 200 && rightPage.length > 600) {
+        // 右ページから一部を左ページに移動
+        const rightSentences = rightPage.split('。')
+        const moveCount = Math.min(2, Math.floor(rightSentences.length / 3))
+
+        const movedSentences = rightSentences.splice(0, moveCount)
+        const newLeftPage = leftPage + (leftPage ? '\n\n' : '') + movedSentences.join('。') + (movedSentences.length > 0 ? '。' : '')
+        const newRightPage = rightSentences.join('。')
+
+        balanced.push(newLeftPage.trim())
+        if (newRightPage.trim()) {
+          balanced.push(newRightPage.trim())
+        }
+      } else {
+        balanced.push(leftPage)
+        if (rightPage) {
+          balanced.push(rightPage)
         }
       }
-      
-      if (adjustedCurrentPage.trim()) {
-        adjustedPages.push(adjustedCurrentPage.trim())
-      }
-      
-      // それでも5ページに満たない場合は空ページを追加
-      while (adjustedPages.length < MIN_PAGES) {
-        adjustedPages.push("")
-      }
-      
-      return adjustedPages
     }
-    
-    return pages.length > 0 ? pages : [content]
+
+    return balanced
   }
 
 
