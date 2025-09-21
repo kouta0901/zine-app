@@ -2,7 +2,7 @@
 
 import { motion, AnimatePresence } from "framer-motion"
 import { useState, useEffect } from "react"
-import { ArrowLeft, ChevronLeft, ChevronRight, Share, Heart, Bookmark } from "lucide-react"
+import { ArrowLeft, ChevronLeft, ChevronRight, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SavedZineData, Element, CreatorMode } from "@/types/zine"
 import { EditModeSelector } from "./EditModeSelector"
@@ -24,72 +24,74 @@ interface ZineViewerProps {
   onEdit?: (mode: CreatorMode) => void
 }
 
-// Render a ZINE element
+// Render a ZINE element with book-like styling
 const renderZineElement = (element: Element, index: number) => {
-  const baseStyle = {
-    position: 'absolute' as const,
-    left: `${(element.x / 1400) * 100}%`,
-    top: `${(element.y / 900) * 100}%`,
-    width: `${(element.width / 1400) * 100}%`,
-    height: `${(element.height / 900) * 100}%`,
-  }
-
   switch (element.type) {
     case 'text':
       return (
         <motion.div
           key={element.id}
+          className="mb-4 p-3 bg-white/50 rounded border-l-4 border-amber-600"
           style={{
-            ...baseStyle,
-            color: element.color || '#000',
-            fontSize: `${(element.fontSize || 16) * 0.8}px`, // Scale down for viewer
-            whiteSpace: 'pre-wrap',
-            overflow: 'hidden',
-            display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'flex-start',
-            padding: '8px',
+            color: element.color || '#4a3c28',
+            fontSize: `${Math.max((element.fontSize || 16) * 0.9, 14)}px`,
           }}
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: index * 0.1, duration: 0.6 }}
         >
-          {element.content}
+          <div className="font-serif leading-relaxed whitespace-pre-wrap">
+            {element.content}
+          </div>
         </motion.div>
       )
-    
+
     case 'image':
       return (
-        <motion.img
+        <motion.div
           key={element.id}
-          src={element.src}
-          alt="ZINE element"
-          style={{
-            ...baseStyle,
-            objectFit: 'cover',
-            borderRadius: '4px',
-          }}
+          className="mb-6 flex justify-center"
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: index * 0.1, duration: 0.6 }}
-        />
+        >
+          <img
+            src={element.src}
+            alt="ZINE illustration"
+            className="max-w-full h-auto rounded-lg shadow-md border border-gray-200"
+            style={{
+              maxHeight: '300px',
+              objectFit: 'contain',
+            }}
+            onError={(e) => {
+              console.log("ZINE image load failed:", element.src)
+              e.currentTarget.src = "/placeholder.svg?height=200&width=300"
+            }}
+          />
+        </motion.div>
       )
-    
+
     case 'shape':
       return (
         <motion.div
           key={element.id}
-          style={{
-            ...baseStyle,
-            backgroundColor: element.color || '#000',
-            borderRadius: element.content === 'circle' ? '50%' : '0',
-          }}
+          className="mb-4 flex justify-center"
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: index * 0.1, duration: 0.6 }}
-        />
+        >
+          <div
+            className="border border-gray-300"
+            style={{
+              backgroundColor: element.color || '#ddd',
+              borderRadius: element.content === 'circle' ? '50%' : '8px',
+              width: '100px',
+              height: '100px',
+            }}
+          />
+        </motion.div>
       )
-    
+
     default:
       return null
   }
@@ -128,576 +130,210 @@ const generatePageContent = (pageNumber: number, zine: Zine) => {
 }
 
 export function ZineViewer({ zine, zineData, onBack, onEdit }: ZineViewerProps) {
-  const [currentPageIndex, setCurrentPageIndex] = useState(0)
-  const [isLiked, setIsLiked] = useState(false) // Fixed
+  const [currentPage, setCurrentPage] = useState(0)
+  const [isLiked, setIsLiked] = useState(false)
   const [isBookmarked, setIsBookmarked] = useState(false)
-  const [showCover, setShowCover] = useState(true) // Start with cover display
-  const [showEditSelector, setShowEditSelector] = useState(false)
 
   // Use actual zine data if available, otherwise use mock data
   const actualPages = zineData?.pages || []
-  const totalPages = Math.max(actualPages.length, zine.pages)
-  
-  // Force cover display if no ZINE data
-  useEffect(() => {
-    if (!zineData || actualPages.length === 0) {
-      setShowCover(true)
-      console.log('🔧 Forcing cover display due to missing ZineData')
-    }
-  }, [zineData, actualPages.length])
-  
+  const hasCover = !!zineData?.coverImageUrl || !!zine.cover
+
+  // Include cover as first page if it exists
+  const totalPages = hasCover ? actualPages.length + 1 : actualPages.length
+  const isOnCover = hasCover && currentPage === 0
+  const contentPageIndex = hasCover ? currentPage - 1 : currentPage
+
   // Debug logging
   console.log('🖥️ ZineViewer rendered with:')
   console.log('  - zine:', zine?.title)
   console.log('  - zineData:', !!zineData)
   console.log('  - actualPages count:', actualPages.length)
   console.log('  - totalPages:', totalPages)
-  console.log('  - showCover:', showCover)
-  console.log('  - currentPageIndex:', currentPageIndex)
+  console.log('  - hasCover:', hasCover)
+  console.log('  - currentPage:', currentPage)
 
-  const nextSpread = () => {
-    console.log('➡️ Next button clicked. Current state:', { showCover, currentPageIndex, totalPages })
-    
-    if (showCover) {
-      // From cover to first page
-      setShowCover(false)
-      setCurrentPageIndex(0)
-      console.log('📖 Transitioning from cover to page 0')
-    } else if (zineData) {
-      // For actual ZINE data: move to next page
-      if (currentPageIndex < totalPages - 1) {
-        setCurrentPageIndex(currentPageIndex + 1)
-        console.log('📄 Moving to page:', currentPageIndex + 1)
-      }
-    } else {
-      // For mock data: original behavior
-      if (currentPageIndex === 0) {
-        setCurrentPageIndex(1)
-      } else if (currentPageIndex < zine.pages - 1) {
-        setCurrentPageIndex(Math.min(currentPageIndex + 2, zine.pages - 1))
-      }
+  const goToPrevPage = () => {
+    if (currentPage > 0) {
+      setCurrentPage(currentPage - 1)
     }
   }
 
-  const prevSpread = () => {
-    console.log('⬅️ Previous button clicked. Current state:', { showCover, currentPageIndex })
-    
-    if (!showCover && currentPageIndex === 0) {
-      // From first page back to cover
-      setShowCover(true)
-      console.log('📖 Transitioning from page to cover')
-    } else if (zineData && !showCover) {
-      // For actual ZINE data: move to previous page
-      if (currentPageIndex > 0) {
-        setCurrentPageIndex(currentPageIndex - 1)
-        console.log('📄 Moving to page:', currentPageIndex - 1)
-      }
-    } else if (!zineData) {
-      // For mock data: original behavior
-      if (currentPageIndex <= 1) {
-        setCurrentPageIndex(0)
-      } else {
-        setCurrentPageIndex(Math.max(currentPageIndex - 2, 1))
-      }
+  const goToNextPage = () => {
+    if (currentPage < totalPages - 1) {
+      setCurrentPage(currentPage + 1)
     }
   }
 
-  const isSpreadView = !showCover && zineData && actualPages.length > 0
-  const isCoverView = showCover
-  
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") goToPrevPage()
+      if (e.key === "ArrowRight") goToNextPage()
+      if (e.key === "Escape") onBack()
+    }
+
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [currentPage, totalPages])
+
   // Get current page data
-  const currentPageData = actualPages[currentPageIndex]
-  
-  // For mock data fallback
-  const leftPageContent = !isSpreadView ? generatePageContent(currentPageIndex, zine) : null
-  const rightPageContent = !isSpreadView && currentPageIndex < zine.pages - 1 ? generatePageContent(currentPageIndex + 1, zine) : null
-  const coverContent = isCoverView ? generatePageContent(0, zine) : null
+  const currentPageData = actualPages[contentPageIndex]
 
   return (
     <motion.div
-      className="fixed inset-0 bg-black z-50"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.6 }}
+      style={{
+        background: "rgba(0, 0, 0, 0.85)",
+        backdropFilter: "blur(10px)"
+      }}
     >
       {/* Header */}
-      <motion.header
-        className="fixed top-0 left-0 right-0 z-50 bg-black/80 backdrop-blur-xl border-b border-white/10"
-        initial={{ y: -100 }}
-        animate={{ y: 0 }}
-        transition={{ delay: 0.3, duration: 0.8 }}
-      >
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Button variant="ghost" size="sm" onClick={onBack} className="text-white hover:bg-white/10">
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back
-              </Button>
-
-              <div>
-                <h1 className="text-xl font-bold text-white">{zine.title}</h1>
-                <p className="text-sm text-gray-400">by {zine.author}</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              {onEdit && zineData && (
-                <EditModeSelector
-                  onSelectMode={(mode) => onEdit(mode)}
-                  onClose={() => setShowEditSelector(false)}
-                />
-              )}
-              
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsLiked(!isLiked)}
-                className={`text-white hover:bg-white/10 ${isLiked ? "text-red-500" : ""}`}
-              >
-                <Heart className={`w-4 h-4 ${isLiked ? "fill-current" : ""}`} />
-              </Button>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsBookmarked(!isBookmarked)}
-                className={`text-white hover:bg-white/10 ${isBookmarked ? "text-yellow-500" : ""}`}
-              >
-                <Bookmark className={`w-4 h-4 ${isBookmarked ? "fill-current" : ""}`} />
-              </Button>
-
-              <Button variant="ghost" size="sm" className="text-white hover:bg-white/10">
-                <Share className="w-4 h-4" />
-              </Button>
-            </div>
+      <div className="absolute top-0 left-0 right-0 p-6 flex items-center justify-between z-10">
+        <div className="flex items-center gap-4">
+          <Button
+            onClick={onBack}
+            variant="ghost"
+            size="icon"
+            className="text-white hover:bg-white/10"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <div className="text-white">
+            <h2 className="text-xl font-bold">{zine.title}</h2>
+            <p className="text-sm opacity-70">by {zine.author}</p>
           </div>
         </div>
-      </motion.header>
 
-      {/* Debug Panel (Development only) */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="fixed top-20 right-4 bg-black/80 text-white p-4 rounded-lg text-xs max-w-sm z-40">
-          <h3 className="font-bold mb-2">🐛 Debug Info</h3>
-          <div className="space-y-1">
-            <div>Zine: {zine?.title}</div>
-            <div>ZineData: {zineData ? '✅ Found' : '❌ Missing'}</div>
-            <div>ActualPages: {actualPages.length}</div>
-            <div>TotalPages: {totalPages}</div>
-            <div>ShowCover: {showCover ? '✅' : '❌'}</div>
-            <div>CurrentPageIndex: {currentPageIndex}</div>
-            <div>IsSpreadView: {isSpreadView ? '✅' : '❌'}</div>
-            <div>CurrentPageData: {currentPageData ? '✅' : '❌'}</div>
-            <div>Elements: {currentPageData?.elements?.length || 0}</div>
-            {zineData && (
-              <div className="mt-2 pt-2 border-t border-white/20">
-                <div>Cover URL: {zineData.coverImageUrl ? '✅' : '❌'}</div>
-                <div>Mode: {zineData.currentMode || 'unknown'}</div>
-                <div>Created: {zineData.createdAt?.slice(0, 10)}</div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Page Content */}
-      <div className="pt-20 h-full flex items-center justify-center">
-        <div className="relative max-w-6xl mx-auto px-6">
-          <AnimatePresence mode="wait">
-            {/* Cover Display */}
-            {isCoverView && (
-              <motion.div
-                key="cover"
-                className="bg-white rounded-2xl shadow-2xl overflow-hidden cursor-pointer"
-                initial={{ opacity: 0, rotateY: -15, z: -100 }}
-                animate={{ opacity: 1, rotateY: 0, z: 0 }}
-                exit={{ opacity: 0, rotateY: 15, z: -100 }}
-                transition={{
-                  duration: 0.8,
-                  ease: [0.25, 0.46, 0.45, 0.94],
-                }}
-                style={{
-                  perspective: 1000,
-                  transformStyle: "preserve-3d",
-                }}
-                onClick={() => {
-                  console.log('📖 Cover clicked, transitioning to pages')
-                  setShowCover(false)
-                  setCurrentPageIndex(0)
-                }}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                <div className="aspect-[3/4] max-h-[80vh] relative">
-                  <div className="relative h-full">
-                    <img
-                      src={zineData?.coverImageUrl || zine.cover || "/placeholder.svg"}
-                      alt={zine.title}
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                    <div className="absolute bottom-8 left-8 text-white">
-                      <motion.h1
-                        className="text-4xl font-bold mb-2"
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.5, duration: 0.6 }}
-                      >
-                        {zine.title}
-                      </motion.h1>
-                      <motion.p
-                        className="text-xl opacity-90"
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.7, duration: 0.6 }}
-                      >
-                        by {zine.author}
-                      </motion.p>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            {/* Actual ZINE Page Display */}
-            {isSpreadView && currentPageData && (
-              <motion.div
-                key={`zine-page-${currentPageIndex}`}
-                className="bg-white rounded-2xl shadow-2xl overflow-hidden"
-                initial={{ opacity: 0, rotateY: -15, z: -100 }}
-                animate={{ opacity: 1, rotateY: 0, z: 0 }}
-                exit={{ opacity: 0, rotateY: 15, z: -100 }}
-                transition={{
-                  duration: 0.8,
-                  ease: [0.25, 0.46, 0.45, 0.94],
-                }}
-                style={{
-                  perspective: 1000,
-                  transformStyle: "preserve-3d",
-                }}
-              >
-                <div 
-                  className="relative"
-                  style={{
-                    width: '1000px',
-                    height: '643px', // Maintain 1400:900 aspect ratio scaled down
-                    maxWidth: '90vw',
-                    maxHeight: '80vh',
-                  }}
-                >
-                  {/* Render all elements for current page */}
-                  {currentPageData?.elements?.map((element, index) => 
-                    renderZineElement(element, index)
-                  )}
-                  
-                  {/* Debug info for empty or missing data */}
-                  {(!currentPageData || !currentPageData.elements || currentPageData.elements.length === 0) && (
-                    <div className="absolute inset-0 flex items-center justify-center text-gray-500">
-                      <div className="text-center">
-                        <p className="text-lg">No content on this page</p>
-                        <p className="text-sm mt-2">
-                          Page: {currentPageIndex + 1} | 
-                          Data: {currentPageData ? 'Found' : 'Missing'} | 
-                          Elements: {currentPageData?.elements?.length || 0}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Page binding line */}
-                  <div
-                    className="absolute top-0 bottom-0 bg-gray-300"
-                    style={{
-                      left: '50%',
-                      width: '2px',
-                      transform: 'translateX(-50%)',
-                    }}
-                  />
-                </div>
-              </motion.div>
-            )}
-
-            {/* Mock data fallback for non-ZINE content */}
-            {!zineData && !showCover && (leftPageContent || rightPageContent) && (
-              <motion.div
-                key={`spread-${currentPageIndex}`}
-                className="flex gap-1 bg-white rounded-2xl shadow-2xl overflow-hidden"
-                initial={{ opacity: 0, rotateY: -15, z: -100 }}
-                animate={{ opacity: 1, rotateY: 0, z: 0 }}
-                exit={{ opacity: 0, rotateY: 15, z: -100 }}
-                transition={{
-                  duration: 0.8,
-                  ease: [0.25, 0.46, 0.45, 0.94],
-                }}
-                style={{
-                  perspective: 1000,
-                  transformStyle: "preserve-3d",
-                }}
-              >
-                {/* Left Page */}
-                <div className="flex-1 aspect-[3/4] max-h-[80vh] relative border-r border-gray-200">
-                  {leftPageContent && (
-                    <>
-                      {leftPageContent.type === "text" && (
-                        <div className="h-full p-8 flex flex-col justify-center">
-                          <motion.h2
-                            className="text-2xl font-bold text-gray-900 mb-4"
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.3, duration: 0.6 }}
-                          >
-                            {leftPageContent.title}
-                          </motion.h2>
-                          <motion.p
-                            className="text-base text-gray-700 leading-relaxed mb-6"
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.5, duration: 0.6 }}
-                          >
-                            {leftPageContent.content}
-                          </motion.p>
-                          <motion.img
-                            src={leftPageContent.image}
-                            alt="Illustration"
-                            className="w-full max-w-xs mx-auto rounded-lg shadow-lg"
-                            initial={{ opacity: 0, scale: 0.9 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            transition={{ delay: 0.7, duration: 0.6 }}
-                          />
-                        </div>
-                      )}
-
-                      {leftPageContent.type === "image" && (
-                        <div className="h-full relative">
-                          <motion.img
-                            src={leftPageContent.image}
-                            alt="Full page image"
-                            className="w-full h-full object-cover"
-                            initial={{ opacity: 0, scale: 1.1 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            transition={{ duration: 0.8 }}
-                          />
-                          {leftPageContent.caption && (
-                            <motion.div
-                              className="absolute bottom-4 left-4 right-4 bg-black/60 backdrop-blur-sm rounded-lg p-3"
-                              initial={{ opacity: 0, y: 20 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              transition={{ delay: 0.5, duration: 0.6 }}
-                            >
-                              <p className="text-white text-sm text-center">{leftPageContent.caption}</p>
-                            </motion.div>
-                          )}
-                        </div>
-                      )}
-
-                      {leftPageContent.type === "mixed" && (
-                        <div className="h-full p-6 flex flex-col justify-center">
-                          <motion.h2
-                            className="text-xl font-bold text-gray-900 mb-3"
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.3, duration: 0.6 }}
-                          >
-                            {leftPageContent.title}
-                          </motion.h2>
-                          <motion.p
-                            className="text-sm text-gray-700 leading-relaxed mb-4"
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.5, duration: 0.6 }}
-                          >
-                            {leftPageContent.content}
-                          </motion.p>
-                          <motion.img
-                            src={leftPageContent.image}
-                            alt="Supporting image"
-                            className="w-full rounded-lg shadow-lg"
-                            initial={{ opacity: 0, scale: 0.9 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            transition={{ delay: 0.7, duration: 0.6 }}
-                          />
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-
-                {/* Right Page */}
-                <div className="flex-1 aspect-[3/4] max-h-[80vh] relative">
-                  {rightPageContent && (
-                    <>
-                      {rightPageContent.type === "text" && (
-                        <div className="h-full p-8 flex flex-col justify-center">
-                          <motion.h2
-                            className="text-2xl font-bold text-gray-900 mb-4"
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.4, duration: 0.6 }}
-                          >
-                            {rightPageContent.title}
-                          </motion.h2>
-                          <motion.p
-                            className="text-base text-gray-700 leading-relaxed mb-6"
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.6, duration: 0.6 }}
-                          >
-                            {rightPageContent.content}
-                          </motion.p>
-                          <motion.img
-                            src={rightPageContent.image}
-                            alt="Illustration"
-                            className="w-full max-w-xs mx-auto rounded-lg shadow-lg"
-                            initial={{ opacity: 0, scale: 0.9 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            transition={{ delay: 0.8, duration: 0.6 }}
-                          />
-                        </div>
-                      )}
-
-                      {rightPageContent.type === "image" && (
-                        <div className="h-full relative">
-                          <motion.img
-                            src={rightPageContent.image}
-                            alt="Full page image"
-                            className="w-full h-full object-cover"
-                            initial={{ opacity: 0, scale: 1.1 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            transition={{ duration: 0.8, delay: 0.2 }}
-                          />
-                          {rightPageContent.caption && (
-                            <motion.div
-                              className="absolute bottom-4 left-4 right-4 bg-black/60 backdrop-blur-sm rounded-lg p-3"
-                              initial={{ opacity: 0, y: 20 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              transition={{ delay: 0.6, duration: 0.6 }}
-                            >
-                              <p className="text-white text-sm text-center">{rightPageContent.caption}</p>
-                            </motion.div>
-                          )}
-                        </div>
-                      )}
-
-                      {rightPageContent.type === "mixed" && (
-                        <div className="h-full p-6 flex flex-col justify-center">
-                          <motion.h2
-                            className="text-xl font-bold text-gray-900 mb-3"
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.4, duration: 0.6 }}
-                          >
-                            {rightPageContent.title}
-                          </motion.h2>
-                          <motion.p
-                            className="text-sm text-gray-700 leading-relaxed mb-4"
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.6, duration: 0.6 }}
-                          >
-                            {rightPageContent.content}
-                          </motion.p>
-                          <motion.img
-                            src={rightPageContent.image}
-                            alt="Supporting image"
-                            className="w-full rounded-lg shadow-lg"
-                            initial={{ opacity: 0, scale: 0.9 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            transition={{ delay: 0.8, duration: 0.6 }}
-                          />
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Navigation */}
-          <div className="absolute top-1/2 -translate-y-1/2 left-4">
-            <Button
-              variant="ghost"
-              size="lg"
-              onClick={prevSpread}
-              disabled={showCover || (!zineData && currentPageIndex === 0)}
-              className="text-white hover:bg-white/10 disabled:opacity-30"
-            >
-              <ChevronLeft className="w-6 h-6" />
-            </Button>
-          </div>
-
-          <div className="absolute top-1/2 -translate-y-1/2 right-4">
-            <Button
-              variant="ghost"
-              size="lg"
-              onClick={nextSpread}
-              disabled={
-                (!showCover && zineData && currentPageIndex >= totalPages - 1) ||
-                (!showCover && !zineData && currentPageIndex >= zine.pages - 1)
-              }
-              className="text-white hover:bg-white/10 disabled:opacity-30"
-            >
-              <ChevronRight className="w-6 h-6" />
-            </Button>
-          </div>
+        <div className="flex items-center gap-4 text-white">
+          {onEdit && zineData && (
+            <EditModeSelector
+              onSelectMode={(mode) => onEdit(mode)}
+              onClose={() => {}}
+            />
+          )}
+          <span className="text-sm opacity-70">
+            {currentPage + 1} / {totalPages}
+          </span>
         </div>
       </div>
 
-      <div className="fixed bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/60 backdrop-blur-sm rounded-full px-4 py-2">
-        <span className="text-white text-sm">
-          {showCover 
-            ? "Cover"
-            : (zineData 
-                ? `Page ${currentPageIndex + 1} / ${totalPages}`
-                : `${currentPageIndex}${rightPageContent ? `-${currentPageIndex + 1}` : ""} / ${zine.pages}`)
-          }
-        </span>
-        <div className="flex gap-1 ml-2">
-          {/* Cover indicator */}
+      {/* Main Content Area */}
+      <div className="relative w-full max-w-4xl h-[80vh] flex items-center justify-center">
+        <AnimatePresence mode="wait">
+          {isOnCover ? (
+            // Cover Page
+            <motion.div
+              key="cover"
+              className="relative w-full h-full flex items-center justify-center"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.3 }}
+            >
+              <div className="relative max-w-md w-full">
+                <div className="aspect-[3/4] rounded-lg overflow-hidden shadow-2xl">
+                  <img
+                    src={zineData?.coverImageUrl || zine.cover || "/placeholder.svg"}
+                    alt={zine.title}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      console.error("Cover image failed to load:", zineData?.coverImageUrl || zine.cover)
+                      e.currentTarget.src = "/placeholder.svg?height=600&width=400"
+                    }}
+                  />
+                </div>
+                <div className="absolute inset-0 flex items-end p-8">
+                  <div className="bg-black/70 backdrop-blur-sm rounded-lg p-6 w-full">
+                    <h1 className="text-3xl font-bold text-white mb-2">{zine.title}</h1>
+                    <p className="text-white/80">by {zine.author}</p>
+                    {zine.createdAt && (
+                      <p className="text-white/60 text-sm mt-2">
+                        {new Date(zine.createdAt).toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          ) : (
+
+            // Content Page
+            <motion.div
+              key={`page-${currentPage}`}
+              className="w-full h-full flex items-center justify-center px-8"
+              initial={{ opacity: 0, x: 100 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -100 }}
+              transition={{ duration: 0.3 }}
+            >
+              <div className="bg-white rounded-lg shadow-2xl p-12 max-w-3xl w-full max-h-[70vh] overflow-y-auto">
+                <div className="prose prose-lg max-w-none" style={{ color: "#4a3c28" }}>
+                  <div className="relative min-h-[400px]">
+                    {/* Render all elements for current page */}
+                    {currentPageData?.elements?.map((element, index) =>
+                      renderZineElement(element, index)
+                    )}
+
+                    {/* Debug info for empty or missing data */}
+                    {(!currentPageData || !currentPageData.elements || currentPageData.elements.length === 0) && (
+                      <div className="flex items-center justify-center h-[400px] text-gray-500">
+                        <div className="text-center">
+                          <p className="text-lg font-serif">ページ内容が見つかりません</p>
+                          <p className="text-sm mt-2">
+                            Page: {currentPage + 1} |
+                            Data: {currentPageData ? 'Found' : 'Missing'} |
+                            Elements: {currentPageData?.elements?.length || 0}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Navigation Buttons */}
+        <button
+          onClick={goToPrevPage}
+          className={`absolute left-4 p-3 rounded-full bg-white/10 backdrop-blur-sm text-white hover:bg-white/20 transition-all ${
+            currentPage === 0 ? "opacity-30 cursor-not-allowed" : ""
+          }`}
+          disabled={currentPage === 0}
+        >
+          <ChevronLeft className="w-6 h-6" />
+        </button>
+
+        <button
+          onClick={goToNextPage}
+          className={`absolute right-4 p-3 rounded-full bg-white/10 backdrop-blur-sm text-white hover:bg-white/20 transition-all ${
+            currentPage === totalPages - 1 ? "opacity-30 cursor-not-allowed" : ""
+          }`}
+          disabled={currentPage === totalPages - 1}
+        >
+          <ChevronRight className="w-6 h-6" />
+        </button>
+      </div>
+
+      {/* Footer with page indicators */}
+      <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex gap-2">
+        {Array.from({ length: Math.min(totalPages, 10) }).map((_, i) => (
           <button
-            onClick={() => {
-              setShowCover(true)
-              setCurrentPageIndex(0)
-            }}
-            className={`w-2 h-2 rounded-full transition-all duration-300 ${
-              showCover ? "bg-white" : "bg-white/30"
+            key={i}
+            onClick={() => setCurrentPage(i)}
+            className={`w-2 h-2 rounded-full transition-all ${
+              i === currentPage
+                ? "bg-white w-8"
+                : "bg-white/30 hover:bg-white/50"
             }`}
           />
-          
-          {/* Page indicators */}
-          {zineData && Array.from({ length: totalPages }).map((_, index) => {
-            const isActive = !showCover && currentPageIndex === index
-            
-            return (
-              <button
-                key={index}
-                onClick={() => {
-                  setShowCover(false)
-                  setCurrentPageIndex(index)
-                }}
-                className={`w-2 h-2 rounded-full transition-all duration-300 ${isActive ? "bg-white" : "bg-white/30"}`}
-              />
-            )
-          })}
-          
-          {/* Mock data page indicators */}
-          {!zineData && Array.from({ length: Math.ceil((zine.pages - 1) / 2) }).map((_, index) => {
-            const pageNum = index * 2 + 1
-            const isActive = !showCover && currentPageIndex >= pageNum && currentPageIndex <= pageNum + 1
-            
-            return (
-              <button
-                key={index}
-                onClick={() => {
-                  setShowCover(false)
-                  setCurrentPageIndex(pageNum)
-                }}
-                className={`w-2 h-2 rounded-full transition-all duration-300 ${isActive ? "bg-white" : "bg-white/30"}`}
-              />
-            )
-          })}
-        </div>
+        ))}
+        {totalPages > 10 && (
+          <span className="text-white/50 text-xs ml-2">+{totalPages - 10}</span>
+        )}
       </div>
     </motion.div>
   )

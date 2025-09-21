@@ -97,19 +97,19 @@ export async function review(payload: {
 
 // 🎯 NOVEL GENERATION PROMPTS - 小説生成用プロンプトシステム
 
-const NOVEL_SYSTEM_PROMPT = `You are a master storyteller and novelist with expertise in visual narrative interpretation. Your specialty is transforming visual content into compelling written narratives that capture every detail, emotion, and nuance present in the images. You excel at:
+const NOVEL_SYSTEM_PROMPT = `You are a master storyteller and novelist with expertise in visual narrative interpretation. Your specialty is transforming visual content into compelling written narratives that capture meaningful story elements and emotional resonance. You excel at:
 - Analyzing visual elements and extracting narrative meaning
-- Creating rich, detailed descriptions that bring images to life
-- Weaving multiple visual elements into cohesive storylines
-- Maintaining consistency between visual content and written narrative`;
+- Creating rich, engaging descriptions that serve the story
+- Weaving visual inspiration into cohesive storylines
+- Crafting authentic narrative voice and compelling characters`;
 
 const IMAGE_ANALYSIS_PROMPT = `When analyzing images for story generation:
 
 🔍 VISUAL ELEMENT EXTRACTION:
-- Identify all characters, objects, and settings visible in the image
-- Note specific details: clothing, expressions, poses, colors, textures
-- Recognize text elements: signs, labels, cards, written content
-- Detect emotional tone and atmosphere conveyed by the image
+- Identify key characters, objects, and settings that drive the narrative
+- Note expressive details: emotions, relationships, atmosphere
+- Focus on visual elements that enhance storytelling
+- Detect the emotional tone and mood of scenes
 
 📖 NARRATIVE INTERPRETATION:
 - Infer relationships between visual elements
@@ -117,17 +117,17 @@ const IMAGE_ANALYSIS_PROMPT = `When analyzing images for story generation:
 - Extract implied actions, motivations, and conflicts
 - Identify symbolic or thematic elements
 
-🎨 DETAIL PRESERVATION:
-- Maintain fidelity to the original visual content
-- Include specific visual details in the narrative
-- Preserve the emotional tone of the images
-- Ensure no important visual element is omitted
+🎨 CREATIVE ADAPTATION:
+- Transform visual inspiration into engaging narrative
+- Emphasize elements that serve the story's purpose
+- Maintain the emotional essence of the images
+- Select meaningful details that enhance character and plot
 
 ✍️ STORY CONSTRUCTION:
 - Build narrative bridges between disconnected images
-- Create logical flow while respecting visual content
-- Add dialogue and internal thoughts that match visual cues
-- Develop character voices consistent with their visual representation`;
+- Create logical flow while developing compelling characters
+- Add dialogue and internal thoughts that feel authentic
+- Develop character voices that resonate with readers`;
 
 const generateNovelPrompt = (payload: {
   concept: string;
@@ -143,51 +143,51 @@ Create a compelling novel based on the provided images with the following requir
 
 🎯 CONCEPT: ${payload.concept}
 🌍 WORLD SETTING: ${payload.world}
-📖 TITLE: ${payload.title}
+📝 TASK: Generate an original novel title and story content from the visual elements
 
 🖼️ IMAGE ANALYSIS REQUIREMENTS:
 1. Carefully analyze each provided image for:
-   - Character appearances and expressions
-   - Environmental details and settings
-   - Text content (cards, signs, labels)
-   - Objects and their significance
-   - Color schemes and mood
-   - Compositional elements suggesting narrative
+   - Character appearances and expressions that drive the narrative
+   - Environmental details that enhance the story setting
+   - Visual elements that suggest plot developments
+   - Objects that serve narrative purpose
+   - Color schemes and mood that inform tone
+   - Compositional elements suggesting story direction
 
 2. Extract narrative elements:
    - Identify protagonist(s) and supporting characters from images
    - Determine the story arc suggested by image sequence
-   - Recognize conflicts or challenges depicted
-   - Note emotional progressions
+   - Recognize conflicts or challenges that create compelling drama
+   - Note emotional progressions that enhance character development
 
-3. Maintain visual fidelity:
-   - Every significant visual element must appear in the story
-   - Character descriptions must match their visual appearance
-   - Settings must reflect the environments shown
-   - Preserve any text content visible in images
+3. Create authentic narrative:
+   - Use visual inspiration to craft engaging characters
+   - Character descriptions should feel natural and compelling
+   - Settings should serve the story's dramatic needs
+   - Focus on storytelling elements that create reader engagement
 
-📝 WRITING REQUIREMENTS:
-- Style: Engaging narrative prose suitable for the genre
-- Length: Appropriate to fully explore the visual content
-- Voice: Consistent with the tone suggested by the images
-- Structure: Clear beginning, development, and conclusion
+📝 WRITING GUIDELINES:
+- Write engaging prose that draws readers into the story world
+- Develop characters that feel real and compelling to readers
+- Create narrative voice that matches the story's emotional tone
+- Build towards satisfying story conclusion
 
-⚠️ CRITICAL RULES:
-1. DO NOT invent elements not present in the images
-2. DO NOT ignore or skip visual details
-3. DO NOT change character appearances from what's shown
-4. DO include all text visible in images (cards, signs, etc.)
-5. DO maintain consistency with the visual narrative flow
+📝 CREATIVE APPROACH:
+1. Let the images inspire authentic storytelling
+2. Create characters that readers will care about
+3. Write dialogue that sounds natural and authentic
+4. Focus on emotional resonance and reader engagement
+5. Craft a story that feels complete and satisfying
 
-🎬 OUTPUT FORMAT:
-- Pure narrative text without metadata
-- Natural chapter or section breaks if needed
-- Seamless integration of visual elements into prose
-- Rich descriptions that honor the source images
+🎬 STORY FORMAT:
+- Write a complete story from beginning to end
+- Use natural narrative flow and pacing
+- Create immersive descriptions that serve the story
+- Focus on compelling characters and engaging plot
 
 ${payload.imageDescriptions ? '📋 ADDITIONAL IMAGE CONTEXT:\n' + payload.imageDescriptions.join('\n') : ''}
 
-Begin the novel now, ensuring every image element is faithfully represented in your narrative:
+Begin crafting your original novel now, drawing inspiration from the visual elements to create a compelling story:
 `;
 };
 

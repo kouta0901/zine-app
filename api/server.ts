@@ -144,6 +144,69 @@ function normalizeImageData(imageData: any): string {
   return base64Data;
 }
 
+// 🔥 SERVER-SIDE TEXT CLEANUP: Filter out UI elements and metadata
+function cleanupOCRTextForNovel(text: string): string {
+  if (!text) return text;
+
+  let cleanedText = text;
+
+  // Remove common UI elements and metadata patterns
+  const uiPatterns = [
+    /クリックして編集/gi,
+    /編集モード/gi,
+    /プレビュー/gi,
+    /保存/gi,
+    /削除/gi,
+    /追加/gi,
+    /ページ\s*\d+/gi,
+    /Page\s*\d+/gi,
+    /ZINE/gi,
+    /ページ番号/gi,
+    /タイトル/gi,
+    /作者/gi,
+    /Author/gi,
+    /Title/gi,
+    /Created/gi,
+    /作成日/gi,
+    /\.png/gi,
+    /\.jpg/gi,
+    /\.jpeg/gi,
+    /\.webp/gi,
+    /placeholder/gi,
+    /no-image/gi,
+    /画像が見つかりません/gi,
+    /loading/gi,
+    /エラー/gi,
+    /Error/gi,
+    /^(無題|untitled)$/gi,
+    /font-family/gi,
+    /font-size/gi,
+    /color:/gi,
+    /background/gi,
+    /margin/gi,
+    /padding/gi
+  ];
+
+  // Apply all cleanup patterns
+  uiPatterns.forEach(pattern => {
+    cleanedText = cleanedText.replace(pattern, '');
+  });
+
+  // Clean up extra whitespace
+  cleanedText = cleanedText
+    .replace(/\s+/g, ' ')
+    .replace(/\n\s*\n/g, '\n')
+    .trim();
+
+  // Return empty if content is too short or meaningless
+  const words = cleanedText.split(/\s+/).filter(word => word.length > 1);
+  if (words.length < 2 && cleanedText.length < 8) {
+    return '';
+  }
+
+  return cleanedText;
+}
+
 async function processOCROnServer(base64Image: string): Promise<OCRResult> {
   if (!processorName) {
     console.log("🔧 OCR: Document AI not configured, returning empty result");
@@ -205,8 +268,12 @@ async function processOCROnServer(base64Image: string): Promise<OCRResult> {
       avgConfidence = tokenCount > 0 ? totalConfidence / tokenCount : 0;
     }
 
+    // 🔥 APPLY CLEANUP: Filter out UI elements and metadata from OCR result
+    const cleanedText = cleanupOCRTextForNovel(extractedText);
+
     console.log(`📄 OCR processed: ${extractedText.length} chars, confidence: ${avgConfidence.toFixed(2)}`);
-    return { text: extractedText, confidence: avgConfidence, words };
+    console.log(`🧹 OCR cleaned: ${extractedText.length} → ${cleanedText.length} chars`);
+    return { text: cleanedText, confidence: avgConfidence, words };
 
   } catch (error) {
     console.error("❌ OCR processing failed:", error);
@@ -253,7 +320,7 @@ async function processCaptioningOnServer(base64Image: string, pageIndex: number)
       }
     });
 
-    const captionPrompt = `この画像について、ZINEや雑誌のページとして簡潔で物語に役立つ分析をお願いします。`;
+    const captionPrompt = `この画像について、物語作成に役立つ詳細な分析をお願いします。`;
 
     const imagePart = {
       inline_data: {
@@ -272,8 +339,12 @@ async function processCaptioningOnServer(base64Image: string, pageIndex: number)
     const response = result.response;
     const caption = response.candidates?.[0]?.content?.parts?.[0]?.text || `ページ${pageIndex + 1}の画像内容の詳細な分析情報`;
 
+    // 🔥 APPLY CLEANUP: Filter out UI elements and metadata from caption
+    const cleanedCaption = cleanupOCRTextForNovel(caption);
+
     console.log(`🎨 Caption generated for page ${pageIndex + 1}: ${caption.substring(0, 100)}...`);
-    return caption;
+    console.log(`🧹 Caption cleaned: ${caption.length} → ${cleanedCaption.length} chars`);
+    return cleanedCaption;
 
   } catch (error) {
     console.error("❌ Captioning failed:", error);
@@ -475,73 +546,67 @@ app.post("/novelize-with-images", async (req, res) => {
       console.log("⚠️ No images provided for server-side processing");
     }
     
-    // Build comprehensive prompt with SERVER-PROCESSED analysis data
-    let enhancedPrompt = `次の設定に基づいて、提供された画像とサーバ側で高精度解析した内容を完全に反映した日本語の小説本文を生成してください。
+    // Build completely natural prompt without any structured formatting or technical data
+    let enhancedPrompt = `画像からインスピレーションを得て、魅力的な物語を創作してください。読者の心に響く感情豊かで自然な小説を書いてください。登場人物の魅力や関係性を大切にし、印象的で読み応えのある展開を描いてください。`;
 
-【基本設定】
-- コンセプト: ${concept}
-- 世界観: ${world}
-- タイトル: ${title || ''}
+    // Remove all technical prompt additions to prevent contamination
 
-【画像ベース小説化・厳格要件（サーバ側高精度処理版）】
-- 各画像のDocument AI OCR抽出テキストをセリフ・ラベル・説明として必ず本文に組み込む
-- Gemini 2.5 Flash生成キャプションの視覚的詳細を情景描写として活用
-- 全てのテキスト要素（看板、ラベル、文字など）を物語に反映
-- 画像の感情トーンと雰囲気を文体や展開に織り込む`;
-
-    if (detailedPrompt) {
-      enhancedPrompt += `\n\n【詳細指示】\n${detailedPrompt}`;
-    }
-
-    // Add SERVER-PROCESSED analysis data (high quality)
+    // Extract only meaningful story elements (without technical structure)
     if (serverAnalysisData.length > 0) {
-      enhancedPrompt += `\n\n【サーバ側高精度解析データ】`;
-      serverAnalysisData.forEach((data, index) => {
-        enhancedPrompt += `\n[Page ${index + 1}] (サーバ処理済み・高品質)
-OCRテキスト: ${data.ocrText || '(テキスト要素なし)'}
-AIキャプション: ${data.caption || '(分析なし)'}
-信頼度: ${(data.confidence * 100).toFixed(1)}%
-抽出単語数: ${data.wordCount}`;
+      const storyElements: string[] = [];
+
+      serverAnalysisData.forEach((data) => {
+        // Only include meaningful text content
+        if (data.ocrText && data.ocrText.trim()) {
+          const cleanText = data.ocrText.trim();
+          if (cleanText.length > 3 && !cleanText.match(/^(ページ|場面|画像|Image|Page)/i)) {
+            storyElements.push(cleanText);
+          }
+        }
+
+        // Only include narrative-useful captions
+        if (data.caption && data.caption.trim()) {
+          const cleanCaption = data.caption.trim();
+          if (!cleanCaption.match(/^(ページ|場面|画像|処理)/i)) {
+            storyElements.push(cleanCaption);
+          }
+        }
       });
+
+      if (storyElements.length > 0) {
+        enhancedPrompt += `\n\n物語のヒントとして、以下の要素をご自由にご活用ください：\n${storyElements.slice(0, 5).join('。 ')}。`;
+      }
     }
     
     // Add fallback for client-processed data (if server processing failed)
     if (enhancedAnalysis && enhancedAnalysis.length > 0 && serverAnalysisData.length === 0) {
       console.log("⚠️ Falling back to client-processed data (server processing failed)");
-      enhancedPrompt += `\n\n【クライアント側解析データ（フォールバック）】`;
-      enhancedAnalysis.forEach((data: any, index: number) => {
-        enhancedPrompt += `\n[Page ${index + 1}] (クライアント処理)
-OCRテキスト: ${data.ocrText || '(なし)'}
-AIキャプション: ${data.caption || '(なし)'}
-関連テキスト: ${data.nearbyText || '(なし)'}
-空間関係: ${data.spatialContext || '(なし)'}
-信頼度: ${(data.confidence * 100).toFixed(1)}%`;
+      const fallbackElements: string[] = [];
+
+      enhancedAnalysis.forEach((data: any) => {
+        // Only include meaningful text content
+        if (data.ocrText && data.ocrText.trim()) {
+          const cleanText = data.ocrText.trim();
+          if (cleanText.length > 3 && !cleanText.match(/^(ページ|場面|画像|Image|Page)/i)) {
+            fallbackElements.push(cleanText);
+          }
+        }
+
+        // Only include narrative-useful captions
+        if (data.caption && data.caption.trim()) {
+          const cleanCaption = data.caption.trim();
+          if (!cleanCaption.match(/^(ページ|場面|画像|処理)/i)) {
+            fallbackElements.push(cleanCaption);
+          }
+        }
       });
+
+      if (fallbackElements.length > 0) {
+        enhancedPrompt += `\n\n物語のヒントとして、以下の要素をご自由にご活用ください：\n${fallbackElements.slice(0, 5).join('。 ')}。`;
+      }
     }
 
-    // Add image descriptions if available
-    if (imageDescriptions && imageDescriptions.length > 0) {
-      enhancedPrompt += `\n\n【補助画像説明】\n${imageDescriptions.join('\n')}`;
-    }
-
-    // Add system instructions
-    if (system_prompt) {
-      enhancedPrompt = `${system_prompt}\n\n${enhancedPrompt}`;
-    }
-    
-    if (user_prompt) {
-      enhancedPrompt += `\n\n${user_prompt}`;
-    }
-
-    if (image_analysis_instructions) {
-      enhancedPrompt += `\n\n【画像解析活用指示】\n${image_analysis_instructions}`;
-    }
-
-    enhancedPrompt += `\n\n制約: 
-- 全ての画像内容を物語に反映すること
-- OCRテキストを省略せずに組み込むこと  
-- 空間関係と時系列を論理的に構成すること
-- 体裁を整え、読みやすい小説として完成させること`;
+    // No additional sections - keep prompt completely natural
 
     try {
       // Direct HTTP API call to Vertex AI (Gemini 2.5 Flash)

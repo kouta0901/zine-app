@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { ChevronLeft, ChevronRight, X, BookOpen, Download } from "lucide-react"
+import { ChevronLeft, ChevronRight, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { CreatorMode } from "@/types/zine"
 import { EditModeSelector } from "./EditModeSelector"
@@ -22,24 +22,34 @@ interface NovelViewerProps {
 }
 
 export function NovelViewer({ novelData, onClose, onEdit }: NovelViewerProps) {
-  const [currentPage, setCurrentPage] = useState(0)
-  const pages = novelData.novelPages || []
+  const [currentSpreadPage, setCurrentSpreadPage] = useState(1) // 1-indexed for spread view
+  const [showCover, setShowCover] = useState(!!novelData.coverImageUrl)
+
+  const novelPages = novelData.novelPages || []
   const hasCover = !!novelData.coverImageUrl
 
-  // Include cover as first page if it exists
-  const totalPages = hasCover ? pages.length + 1 : pages.length
-  const isOnCover = hasCover && currentPage === 0
-  const contentPageIndex = hasCover ? currentPage - 1 : currentPage
+  // Calculate total spread pages (each spread shows 2 pages)
+  const totalSpreadPages = Math.max(1, Math.ceil(novelPages.length / 2))
+
+  // For backward compatibility with existing navigation
+  const totalPages = hasCover ? totalSpreadPages + 1 : totalSpreadPages
+  const currentPage = showCover ? 0 : currentSpreadPage
 
   const goToPrevPage = () => {
-    if (currentPage > 0) {
-      setCurrentPage(currentPage - 1)
+    if (!showCover && currentSpreadPage > 1) {
+      setCurrentSpreadPage(currentSpreadPage - 1)
+    } else if (!showCover && currentSpreadPage === 1 && hasCover) {
+      // Go back to cover from first spread page
+      setShowCover(true)
     }
   }
 
   const goToNextPage = () => {
-    if (currentPage < totalPages - 1) {
-      setCurrentPage(currentPage + 1)
+    if (showCover) {
+      setShowCover(false)
+      setCurrentSpreadPage(1)
+    } else if (currentSpreadPage < totalSpreadPages) {
+      setCurrentSpreadPage(currentSpreadPage + 1)
     }
   }
 
@@ -98,7 +108,7 @@ export function NovelViewer({ novelData, onClose, onEdit }: NovelViewerProps) {
       {/* Main Content Area */}
       <div className="relative w-full max-w-4xl h-[80vh] flex items-center justify-center">
         <AnimatePresence mode="wait">
-          {isOnCover ? (
+          {showCover ? (
             // Cover Page
             <motion.div
               key="cover"
@@ -134,19 +144,125 @@ export function NovelViewer({ novelData, onClose, onEdit }: NovelViewerProps) {
               </div>
             </motion.div>
           ) : (
-            // Content Page
+            // Spread View - Left and Right Pages
             <motion.div
-              key={`page-${currentPage}`}
-              className="w-full h-full flex items-center justify-center px-8"
+              key={`spread-${currentSpreadPage}`}
+              className="w-full h-full flex items-center justify-center"
               initial={{ opacity: 0, x: 100 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -100 }}
               transition={{ duration: 0.3 }}
             >
-              <div className="bg-white rounded-lg shadow-2xl p-12 max-w-3xl w-full max-h-[70vh] overflow-y-auto">
-                <div className="prose prose-lg max-w-none" style={{ color: "#4a3c28" }}>
-                  <div className="whitespace-pre-wrap font-serif leading-relaxed text-lg">
-                    {pages[contentPageIndex] || "ページ内容が見つかりません"}
+              <div className="relative w-full max-w-6xl aspect-[1.6/1] mx-auto">
+                {/* Book container with styling */}
+                <div
+                  className="relative w-full h-full rounded-xl"
+                  style={{
+                    background: `
+                      linear-gradient(135deg,
+                        rgba(255,253,250,0.9) 0%,
+                        rgba(255,253,250,0.9) 20%,
+                        rgba(250,245,230,0.85) 50%,
+                        rgba(245,240,225,0.9) 80%,
+                        rgba(248,243,230,0.95) 100%
+                      ),
+                      #FFFEF9
+                    `,
+                    boxShadow: `
+                      0 0 0 2px rgba(139,105,20,0.2),
+                      0 0 0 4px rgba(74,60,40,0.1),
+                      0 25px 50px -15px rgba(0,0,0,0.4),
+                      inset 0 2px 0 rgba(255,253,250,0.4),
+                      inset 0 -2px 0 rgba(139,115,85,0.1)
+                    `,
+                    zIndex: 1,
+                  }}
+                >
+                  {/* Page aging/vintage effect */}
+                  <div className="absolute inset-0 opacity-[0.03] rounded-xl" style={{
+                    background: `
+                      radial-gradient(circle at 20% 80%, rgba(139,69,19,0.8) 0%, transparent 50%),
+                      radial-gradient(circle at 80% 20%, rgba(160,82,45,0.6) 0%, transparent 50%),
+                      radial-gradient(circle at 40% 40%, rgba(101,67,33,0.4) 0%, transparent 30%)
+                    `
+                  }}></div>
+
+                  {/* Enhanced center binding with stitching effect */}
+                  <div
+                    className="absolute left-1/2 top-0 bottom-0 w-2 transform -translate-x-1/2 z-30 rounded-xl"
+                    style={{
+                      background: `linear-gradient(180deg,
+                        rgba(139,105,20,0.4) 0%,
+                        rgba(74,60,40,0.2) 20%,
+                        rgba(139,115,85,0.1) 50%,
+                        rgba(74,60,40,0.2) 80%,
+                        rgba(139,105,20,0.4) 100%
+                      )`,
+                      boxShadow: `
+                        -3px 0 6px rgba(139,69,19,0.3),
+                        3px 0 6px rgba(139,69,19,0.3),
+                        inset 0 0 2px rgba(218,165,32,0.2)
+                      `,
+                    }}
+                  >
+                    {/* Stitching pattern */}
+                    <div className="absolute left-1/2 top-4 bottom-4 w-0 border-l border-dashed transform -translate-x-1/2" style={{
+                      borderColor: "rgba(139,105,20,0.3)"
+                    }}></div>
+                  </div>
+
+                  {/* Fixed page numbers at the bottom */}
+                  <div className="absolute bottom-6 w-full flex justify-between px-6 z-40">
+                    <div className="w-1/2 text-center">
+                      <span className="text-xs" style={{ color: "#a0896c", fontFamily: "serif" }}>
+                        {currentSpreadPage * 2 - 1}
+                      </span>
+                    </div>
+                    <div className="w-1/2 text-center">
+                      <span className="text-xs" style={{ color: "#a0896c", fontFamily: "serif" }}>
+                        {currentSpreadPage * 2}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Page content container */}
+                  <div className="flex h-full relative z-10">
+                    {/* Left page */}
+                    <div className="w-1/2 pr-4 relative">
+                      <div className="absolute top-6 left-6 text-xs" style={{ color: "#a0896c", fontFamily: "serif" }}>
+                        {novelData.title}
+                      </div>
+                      <div className="px-12 py-20 h-full">
+                        <div
+                          className="text-base leading-8 whitespace-pre-wrap cursor-text h-full overflow-y-auto"
+                          style={{
+                            color: "#4a3c28",
+                            fontFamily: 'Georgia, "Times New Roman", serif',
+                            lineHeight: "2.2",
+                            textShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                          }}
+                        >
+                          {novelPages[(currentSpreadPage - 1) * 2] || ""}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right page */}
+                    <div className="w-1/2 pl-4 relative">
+                      <div className="px-12 py-20 h-full">
+                        <div
+                          className="text-base leading-8 whitespace-pre-wrap cursor-text h-full overflow-y-auto"
+                          style={{
+                            color: "#4a3c28",
+                            fontFamily: 'Georgia, "Times New Roman", serif',
+                            lineHeight: "2.2",
+                            textShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                          }}
+                        >
+                          {novelPages[(currentSpreadPage - 1) * 2 + 1] || ""}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -154,43 +270,69 @@ export function NovelViewer({ novelData, onClose, onEdit }: NovelViewerProps) {
           )}
         </AnimatePresence>
 
-        {/* Navigation Buttons */}
-        <button
+        {/* Subtle Side Navigation Areas */}
+        <div
           onClick={goToPrevPage}
-          className={`absolute left-4 p-3 rounded-full bg-white/10 backdrop-blur-sm text-white hover:bg-white/20 transition-all ${
-            currentPage === 0 ? "opacity-30 cursor-not-allowed" : ""
+          className={`absolute left-0 top-0 bottom-0 w-24 flex items-center justify-start pl-4 cursor-pointer group z-20 ${
+            showCover ? "pointer-events-none" : ""
           }`}
-          disabled={currentPage === 0}
         >
-          <ChevronLeft className="w-6 h-6" />
-        </button>
+          <div className={`p-3 rounded-full transition-all duration-300 ${
+            showCover
+              ? "opacity-0"
+              : "opacity-20 group-hover:opacity-100 bg-black/20 group-hover:bg-black/40 backdrop-blur-sm"
+          }`}>
+            <ChevronLeft className="w-6 h-6 text-white/80 group-hover:text-white" />
+          </div>
+        </div>
 
-        <button
+        <div
           onClick={goToNextPage}
-          className={`absolute right-4 p-3 rounded-full bg-white/10 backdrop-blur-sm text-white hover:bg-white/20 transition-all ${
-            currentPage === totalPages - 1 ? "opacity-30 cursor-not-allowed" : ""
+          className={`absolute right-0 top-0 bottom-0 w-24 flex items-center justify-end pr-4 cursor-pointer group z-20 ${
+            (!showCover && currentSpreadPage >= totalSpreadPages) ? "pointer-events-none" : ""
           }`}
-          disabled={currentPage === totalPages - 1}
         >
-          <ChevronRight className="w-6 h-6" />
-        </button>
+          <div className={`p-3 rounded-full transition-all duration-300 ${
+            (!showCover && currentSpreadPage >= totalSpreadPages)
+              ? "opacity-0"
+              : "opacity-20 group-hover:opacity-100 bg-black/20 group-hover:bg-black/40 backdrop-blur-sm"
+          }`}>
+            <ChevronRight className="w-6 h-6 text-white/80 group-hover:text-white" />
+          </div>
+        </div>
       </div>
 
       {/* Footer with page indicators */}
       <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex gap-2">
-        {Array.from({ length: Math.min(totalPages, 10) }).map((_, i) => (
+        {hasCover && (
+          <button
+            onClick={() => {
+              setShowCover(true)
+              setCurrentSpreadPage(1)
+            }}
+            className={`w-2 h-2 rounded-full transition-all ${
+              showCover
+                ? "bg-white w-8"
+                : "bg-white/30 hover:bg-white/50"
+            }`}
+          />
+        )}
+        {Array.from({ length: Math.min(totalSpreadPages, 10) }).map((_, i) => (
           <button
             key={i}
-            onClick={() => setCurrentPage(i)}
+            onClick={() => {
+              setShowCover(false)
+              setCurrentSpreadPage(i + 1)
+            }}
             className={`w-2 h-2 rounded-full transition-all ${
-              i === currentPage
+              !showCover && (i + 1) === currentSpreadPage
                 ? "bg-white w-8"
                 : "bg-white/30 hover:bg-white/50"
             }`}
           />
         ))}
-        {totalPages > 10 && (
-          <span className="text-white/50 text-xs ml-2">+{totalPages - 10}</span>
+        {totalSpreadPages > 10 && (
+          <span className="text-white/50 text-xs ml-2">+{totalSpreadPages - 10}</span>
         )}
       </div>
     </motion.div>

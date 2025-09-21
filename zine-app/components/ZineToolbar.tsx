@@ -80,7 +80,7 @@ export function ZineToolbar({
             </Button>
             
             <Input
-              placeholder="無題のZINE"
+              placeholder="無題"
               value={zineTitle}
               onChange={(e) => setZineTitle(e.target.value)}
               className="text-xl font-bold border-none bg-transparent focus:outline-none"

@@ -1636,31 +1636,102 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
   
   // ページの詳細説明を生成する関数
   const generatePageDescription = (page: Page, pageNumber: number): string => {
-    const descriptions: string[] = []
-    descriptions.push(`Page ${pageNumber}:`)
-    
-    // テキスト要素の説明
-    const textElements = page.elements.filter(el => el.type === 'text')
-    if (textElements.length > 0) {
-      descriptions.push(`Text content: ${textElements.map(el => el.content).join(', ')}`)
+    const narrativeElements: string[] = []
+
+    // Extract meaningful text content (without technical formatting)
+    const textElements = page.elements.filter(el => el.type === 'text' && el.content && el.content.trim())
+    const meaningfulTexts = textElements
+      .map(el => el.content?.trim() || '')
+      .filter(content => content.length > 0 && !content.match(/^(タイトル|概要|設定|ジャンル)/i))
+      .slice(0, 3) // Limit to most important content
+
+    if (meaningfulTexts.length > 0) {
+      narrativeElements.push(...meaningfulTexts)
     }
-    
-    // 画像要素の説明
+
+    // Extract image descriptions (focus on narrative value)
     const imageElements = page.elements.filter(el => el.type === 'image')
-    if (imageElements.length > 0) {
-      imageElements.forEach((img, idx) => {
-        if (img.altText || img.description) {
-          descriptions.push(`Image ${idx + 1}: ${img.altText || img.description}`)
-        }
-      })
+    const imageDescriptions = imageElements
+      .map(img => img.altText || img.description || '')
+      .filter(desc => desc && desc.trim().length > 0)
+      .slice(0, 2) // Limit to most important images
+
+    if (imageDescriptions.length > 0) {
+      narrativeElements.push(...imageDescriptions)
     }
-    
-    // レイアウト情報
-    descriptions.push(`Layout: ${page.elements.length} elements total`)
-    
-    return descriptions.join(' | ')
+
+    // Return natural description without technical metadata
+    return narrativeElements.length > 0
+      ? narrativeElements.join('. ')
+      : `シーン${pageNumber}の描写`
   }
-  
+
+  // 🔥 TEXT CLEANUP FUNCTIONS - Filter out ZINE metadata and UI elements
+  const cleanupTextForNovel = (text: string, zineTitle?: string): string => {
+    if (!text) return text
+
+    let cleanedText = text
+
+    // Remove ZINE title if provided
+    if (zineTitle && zineTitle.trim()) {
+      const titlePattern = new RegExp(zineTitle.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
+      cleanedText = cleanedText.replace(titlePattern, '')
+    }
+
+    // Remove common UI elements and metadata
+    const uiPatterns = [
+      /クリックして編集/gi,
+      /編集モード/gi,
+      /プレビュー/gi,
+      /保存/gi,
+      /削除/gi,
+      /追加/gi,
+      /ページ\s*\d+/gi,
+      /Page\s*\d+/gi,
+      /ZINE/gi,
+      /ページ番号/gi,
+      /タイトル/gi,
+      /作者/gi,
+      /Author/gi,
+      /Title/gi,
+      /Created/gi,
+      /作成日/gi,
+      /\.png/gi,
+      /\.jpg/gi,
+      /\.jpeg/gi,
+      /\.webp/gi,
+      /placeholder/gi,
+      /no-image/gi,
+      /画像が見つかりません/gi,
+      /loading/gi,
+      /エラー/gi,
+      /Error/gi,
+      /^(無題|untitled)$/gi
+    ]
+
+    // Apply all cleanup patterns
+    uiPatterns.forEach(pattern => {
+      cleanedText = cleanedText.replace(pattern, '')
+    })
+
+    // Clean up extra whitespace and empty lines
+    cleanedText = cleanedText
+      .replace(/\s+/g, ' ')  // Replace multiple spaces with single space
+      .replace(/\n\s*\n/g, '\n')  // Remove empty lines
+      .trim()
+
+    // Remove very short fragments (likely UI artifacts)
+    const words = cleanedText.split(/\s+/)
+    const meaningfulWords = words.filter(word => word.length > 2)
+
+    // Only return if we have meaningful content
+    if (meaningfulWords.length < 3 && cleanedText.length < 10) {
+      return ''  // Return empty if content is too short/meaningless
+    }
+
+    return cleanedText
+  }
+
   // Enhanced ZINE image extraction with OCR, captioning, and spatial analysis
   const extractZineImages = async (): Promise<{
     images: string[], 
@@ -1753,38 +1824,34 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
               spatialContext += `${imageElements.length} images, ${textElements.length} text elements`
             }
             
-            // Create enhanced description combining all analysis
-            const enhancedDescription = [
-              `Page ${i + 1}:`,
-              `OCR: "${ocrResult.text.substring(0, 100)}${ocrResult.text.length > 100 ? '...' : ''}"`,
-              `Caption: "${captionResult.caption.substring(0, 150)}${captionResult.caption.length > 150 ? '...' : ''}"`,
-              `Spatial: ${spatialContext}`,
-              `Elements: ${page.elements.length} total`
-            ].join(' | ')
+            // Remove technical metadata structure to prevent contamination
+            // Enhanced data is preserved in enhancedData array for actual content processing
             
-            descriptions.push(enhancedDescription)
-            
-            // Store enhanced data
+            // 🔥 APPLY CLEANUP to filter out ZINE metadata and UI elements
+            const cleanedOcrText = cleanupTextForNovel(ocrResult.text, zineTitle)
+            const cleanedCaption = cleanupTextForNovel(captionResult.caption, zineTitle)
+            const cleanedNearbyText = cleanupTextForNovel(nearbyTextContent, zineTitle)
+
+            // Store enhanced data with cleaned text
             enhancedData.push({
               imageBase64,
-              ocrText: ocrResult.text,
-              caption: captionResult.caption,
-              nearbyText: nearbyTextContent,
+              ocrText: cleanedOcrText,
+              caption: cleanedCaption,
+              nearbyText: cleanedNearbyText,
               spatialContext,
               pageIndex: i,
               confidence: (ocrResult.confidence + captionResult.confidence) / 2
             })
             
             console.log(`✅ Enhanced analysis completed for page ${i + 1}`)
-            console.log(`   - OCR extracted: ${ocrResult.text.length} chars`)
-            console.log(`   - Caption generated: ${captionResult.caption.length} chars`)
+            console.log(`   - OCR extracted: ${ocrResult.text.length} chars (cleaned: ${cleanedOcrText.length} chars)`)
+            console.log(`   - Caption generated: ${captionResult.caption.length} chars (cleaned: ${cleanedCaption.length} chars)`)
+            console.log(`   - Nearby text: ${nearbyTextContent.length} chars (cleaned: ${cleanedNearbyText.length} chars)`)
             console.log(`   - Spatial relationships: ${layout.imageTextPairs.length} pairs`)
             
           } catch (analysisError) {
             console.warn(`⚠️ Enhanced analysis failed for page ${i + 1}, using fallback:`, analysisError)
-            // Fallback to basic page description
-            const basicDescription = generatePageDescription(page, i + 1)
-            descriptions.push(basicDescription)
+            // Fallback: no technical descriptions to prevent contamination
             
             // Store minimal enhanced data
             enhancedData.push({
@@ -1812,7 +1879,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
       
       return {
         images,
-        title: zineTitle.trim() || '無題のZINE',
+        title: zineTitle.trim() || '無題',
         descriptions,
         enhancedData
       }
@@ -2068,63 +2135,33 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
   const handleNovelize = async () => {
     console.log("🎬 Starting image-based novel generation...")
     
-    const concept = `${conceptConfig.genre} ${conceptConfig.keywords}`
-    const characters = (worldviewConfig.characters || []).map((c: any, idx: number) => `人物${idx + 1}: ${c.name}（性格: ${c.personality}）`).join(" / ")
-    const world = `舞台: ${worldviewConfig.stage}\n${characters}\nシナリオ: ${worldviewConfig.scenario}`
+    // Convert all data to natural language format to prevent technical contamination
+    const concept = conceptConfig.genre || "自由創作"
+    const world = `${worldviewConfig.stage || "架空の世界"}を舞台とした${worldviewConfig.scenario || "物語"}として`
     
     setIsGeneratingNovel(true)
     
     try {
       // ZINEページを画像化（Enhanced AI Analysis）
       console.log("📸 Extracting ZINE images with AI enhancement...")
-      const { images, title, descriptions, enhancedData } = await extractZineImages()
-      
+      const { images, enhancedData } = await extractZineImages()
+
       if (images.length === 0) {
         alert("小説化にはZINEページに画像またはテキスト要素が必要です。ページに要素を追加してください。")
         return
       } else {
         // 強化版画像ベースの小説生成
         console.log(`🖼️ Generating enhanced novel from ${images.length} ZINE images...`)
-        
-        // Enhanced API call with OCR, captioning, and spatial analysis data
+
+        // Completely remove title to prevent any contamination
         const result = await novelizeWithImagesEnhanced({
           concept,
           world,
           images,
-          title,
-          imageDescriptions: descriptions,
-          enhancedAnalysis: enhancedData, // Include enhanced AI analysis data
-          detailedPrompt: `
-            【強化AI解析による高精度小説生成】
-            Document AI OCRとVertex AI Geminiを使用した詳細分析結果を基に、画像の内容を100%反映した小説を生成してください。
-            
-            【解析データの活用指示】
-            1. OCRテキスト: 画像内の文字（タイトル、看板、標識、説明文など）を正確にセリフや描写に組み込む
-            2. AI生成キャプション: 視覚的詳細を物語の情景描写として活用
-            3. 空間解析: 画像とテキストの位置関係から論理的な物語構成を構築
-            4. 感情トーン: 画像から抽出された感情を文体や展開に反映
-            
-            【品質要求】
-            - 画像内の全テキスト要素（看板、ラベル、説明文など）を漏らさず物語に統合
-            - キャラクターの外見、表情、ポーズを具体的に描写
-            - 背景や環境を詳細に設定として活用
-            - 画像順序＝時系列として論理的な展開を構築
-            - 各ページ間の連続性と一貫性を保持
-            - 空間関係に基づく画像とテキストの論理的配置を反映
-            
-            【強化解析結果】
-            ${enhancedData?.map((data, i) => `
-            ページ${i + 1}:
-            - OCR読取: "${data.ocrText.substring(0, 200)}${data.ocrText.length > 200 ? '...' : ''}"
-            - AI描写: "${data.caption.substring(0, 200)}${data.caption.length > 200 ? '...' : ''}"
-            - 周辺文脈: "${data.nearbyText}"
-            - 空間構成: ${data.spatialContext}
-            - 信頼度: ${Math.round(data.confidence * 100)}%
-            `).join('\n') || ''}
-            
-            ページ構成詳細：
-            ${descriptions.join('\n')}
-          `
+          title: "",  // No title to prevent contamination
+          // imageDescriptions: descriptions, // 🔥 REMOVED: Stop sending imageDescriptions to prevent contamination
+          enhancedAnalysis: enhancedData // Include enhanced AI analysis data
+          // No detailed prompt to prevent technical contamination
         })
         
         let cleanedText = result.text
@@ -2225,7 +2262,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
 
       const zineData = {
         ...(isExistingWork && { id: existingWorkId }), // Include ID only for existing works
-        title: zineTitle || "無題のZINE",
+        title: zineTitle || "無題",
         status: workStatus, // 🔥 完成度に基づいて "published" または "draft"
         isComplete: isComplete, // 🔥 完成フラグを追加
         currentMode: currentMode, // 🔥 現在のモードを保存
