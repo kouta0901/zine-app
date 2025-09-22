@@ -330,7 +330,7 @@ export function ZineMenuPanel({
               <BookOpen className="w-6 h-6" />
               ZINE Mode
             </h2>
-            <p className="text-sm" style={{ color: "#8b7355" }}>雑誌のようなビジュアル作品を作成</p>
+            <p className="text-sm" style={{ color: "#8b7355" }}>自由帳みたいに、思いのまま作品づくり</p>
           </div>
 
           {!hasZineContent && (

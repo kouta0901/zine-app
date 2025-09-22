@@ -346,6 +346,8 @@ export const ZineCanvas = forwardRef<ZineCanvasHandle, ZineCanvasProps>(({
       const y = (e.clientY - rect.top) / (zoom * scaleFactor)
       setMenuPos({ x, y })
       setMenuOpen(true)
+      // Deselect any selected element when clicking on empty space
+      setSelectedElement(null)
     }
   }
 
@@ -716,6 +718,151 @@ export const ZineCanvas = forwardRef<ZineCanvasHandle, ZineCanvasProps>(({
                     >
                       {element.content}
                     </div>
+                  )}
+                  
+                  {/* Resize handles for selected text elements */}
+                  {selectedElement === element.id && element.type === "text" && (
+                    <>
+                      {/* Corner handles */}
+                      <div
+                        className="absolute -top-1 -left-1 w-3 h-3 bg-purple-500 rounded-full cursor-nw-resize"
+                        onMouseDown={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          setResizingElement(element.id)
+                          setResizeHandle('top-left')
+                          setInitialResize({
+                            width: element.width,
+                            height: element.height,
+                            x: element.x,
+                            y: element.y,
+                            mouseX: e.clientX,
+                            mouseY: e.clientY
+                          })
+                        }}
+                      />
+                      <div
+                        className="absolute -top-1 -right-1 w-3 h-3 bg-purple-500 rounded-full cursor-ne-resize"
+                        onMouseDown={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          setResizingElement(element.id)
+                          setResizeHandle('top-right')
+                          setInitialResize({
+                            width: element.width,
+                            height: element.height,
+                            x: element.x,
+                            y: element.y,
+                            mouseX: e.clientX,
+                            mouseY: e.clientY
+                          })
+                        }}
+                      />
+                      <div
+                        className="absolute -bottom-1 -left-1 w-3 h-3 bg-purple-500 rounded-full cursor-sw-resize"
+                        onMouseDown={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          setResizingElement(element.id)
+                          setResizeHandle('bottom-left')
+                          setInitialResize({
+                            width: element.width,
+                            height: element.height,
+                            x: element.x,
+                            y: element.y,
+                            mouseX: e.clientX,
+                            mouseY: e.clientY
+                          })
+                        }}
+                      />
+                      <div
+                        className="absolute -bottom-1 -right-1 w-3 h-3 bg-purple-500 rounded-full cursor-se-resize"
+                        onMouseDown={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          setResizingElement(element.id)
+                          setResizeHandle('bottom-right')
+                          setInitialResize({
+                            width: element.width,
+                            height: element.height,
+                            x: element.x,
+                            y: element.y,
+                            mouseX: e.clientX,
+                            mouseY: e.clientY
+                          })
+                        }}
+                      />
+                      
+                      {/* Edge handles */}
+                      <div
+                        className="absolute -top-1 left-1/2 transform -translate-x-1/2 w-3 h-3 bg-purple-500 rounded-full cursor-n-resize"
+                        onMouseDown={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          setResizingElement(element.id)
+                          setResizeHandle('top')
+                          setInitialResize({
+                            width: element.width,
+                            height: element.height,
+                            x: element.x,
+                            y: element.y,
+                            mouseX: e.clientX,
+                            mouseY: e.clientY
+                          })
+                        }}
+                      />
+                      <div
+                        className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-3 h-3 bg-purple-500 rounded-full cursor-s-resize"
+                        onMouseDown={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          setResizingElement(element.id)
+                          setResizeHandle('bottom')
+                          setInitialResize({
+                            width: element.width,
+                            height: element.height,
+                            x: element.x,
+                            y: element.y,
+                            mouseX: e.clientX,
+                            mouseY: e.clientY
+                          })
+                        }}
+                      />
+                      <div
+                        className="absolute -left-1 top-1/2 transform -translate-y-1/2 w-3 h-3 bg-purple-500 rounded-full cursor-w-resize"
+                        onMouseDown={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          setResizingElement(element.id)
+                          setResizeHandle('left')
+                          setInitialResize({
+                            width: element.width,
+                            height: element.height,
+                            x: element.x,
+                            y: element.y,
+                            mouseX: e.clientX,
+                            mouseY: e.clientY
+                          })
+                        }}
+                      />
+                      <div
+                        className="absolute -right-1 top-1/2 transform -translate-y-1/2 w-3 h-3 bg-purple-500 rounded-full cursor-e-resize"
+                        onMouseDown={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          setResizingElement(element.id)
+                          setResizeHandle('right')
+                          setInitialResize({
+                            width: element.width,
+                            height: element.height,
+                            x: element.x,
+                            y: element.y,
+                            mouseX: e.clientX,
+                            mouseY: e.clientY
+                          })
+                        }}
+                      />
+                    </>
                   )}
                   {element.type === "image" && (
                     <>

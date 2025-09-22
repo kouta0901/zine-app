@@ -106,7 +106,7 @@ export function NovelViewer({ novelData, onClose, onEdit }: NovelViewerProps) {
       </div>
 
       {/* Main Content Area */}
-      <div className="relative w-full max-w-4xl h-[80vh] flex items-center justify-center">
+      <div className="relative w-full max-w-7xl h-[90vh] flex items-center justify-center">
         <AnimatePresence mode="wait">
           {showCover ? (
             // Cover Page
@@ -130,16 +130,15 @@ export function NovelViewer({ novelData, onClose, onEdit }: NovelViewerProps) {
                     }}
                   />
                 </div>
-                <div className="absolute inset-0 flex items-end p-8">
-                  <div className="bg-black/70 backdrop-blur-sm rounded-lg p-6 w-full">
-                    <h1 className="text-3xl font-bold text-white mb-2">{novelData.title}</h1>
-                    <p className="text-white/80">by {novelData.author}</p>
-                    {novelData.createdAt && (
-                      <p className="text-white/60 text-sm mt-2">
-                        {new Date(novelData.createdAt).toLocaleDateString()}
-                      </p>
-                    )}
-                  </div>
+                {/* Cover info moved below image */}
+                <div className="mt-6 p-6 bg-white/90 backdrop-blur-sm rounded-lg shadow-lg">
+                  <h1 className="text-3xl font-bold text-gray-800 mb-2">{novelData.title}</h1>
+                  <p className="text-gray-600">by {novelData.author}</p>
+                  {novelData.createdAt && (
+                    <p className="text-gray-500 text-sm mt-2">
+                      {new Date(novelData.createdAt).toLocaleDateString()}
+                    </p>
+                  )}
                 </div>
               </div>
             </motion.div>
@@ -232,9 +231,9 @@ export function NovelViewer({ novelData, onClose, onEdit }: NovelViewerProps) {
                       <div className="absolute top-6 left-6 text-xs" style={{ color: "#a0896c", fontFamily: "serif" }}>
                         {novelData.title}
                       </div>
-                      <div className="px-12 py-20 h-full">
+                      <div className="px-12 py-20 h-full pb-20">
                         <div
-                          className="text-base leading-8 whitespace-pre-wrap cursor-text h-full overflow-y-auto"
+                          className="text-lg leading-8 whitespace-pre-wrap cursor-text h-full"
                           style={{
                             color: "#4a3c28",
                             fontFamily: 'Georgia, "Times New Roman", serif',
@@ -249,9 +248,9 @@ export function NovelViewer({ novelData, onClose, onEdit }: NovelViewerProps) {
 
                     {/* Right page */}
                     <div className="w-1/2 pl-4 relative">
-                      <div className="px-12 py-20 h-full">
+                      <div className="px-12 py-20 h-full pb-20">
                         <div
-                          className="text-base leading-8 whitespace-pre-wrap cursor-text h-full overflow-y-auto"
+                          className="text-lg leading-8 whitespace-pre-wrap cursor-text h-full"
                           style={{
                             color: "#4a3c28",
                             fontFamily: 'Georgia, "Times New Roman", serif',

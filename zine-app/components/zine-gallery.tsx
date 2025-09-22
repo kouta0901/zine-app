@@ -13,7 +13,6 @@ interface Zine {
   author: string
   cover: string
   pages: number
-  genre: string
   createdAt: string
   isOwned?: boolean
 }
@@ -102,8 +101,8 @@ export function ZineGallery({ zines, onZineSelect, onCreateNew, onWorkSelect, on
           transition={{ duration: 0.8, delay: 0.2 }}
         >
           <div className="mb-8">
-            <h2 className="text-3xl font-bold mb-2" style={{ color: "#4a3c28" }}>Discover</h2>
-            <p style={{ color: "#8b7355" }}>Explore amazing ZINEs created by the community</p>
+            <h2 className="text-3xl font-bold mb-2" style={{ color: "#4a3c28" }}>Find Books</h2>
+            <p style={{ color: "#8b7355" }}>コミュニティが作成した素晴らしい本を見つけよう</p>
           </div>
 
           <motion.div
@@ -220,16 +219,6 @@ function ZineCard({ zine, index, onSelect, onDelete, isOwned }: ZineCardProps) {
             transition={{ duration: 0.4 }}
           />
 
-          {/* Genre badge */}
-          <div className="absolute top-3 right-3">
-            <span className="px-2 py-1 text-xs font-medium backdrop-blur-sm rounded-full border" style={{
-              backgroundColor: "rgba(139, 105, 20, 0.8)",
-              color: "#fffdf7",
-              borderColor: "rgba(255, 253, 250, 0.3)"
-            }}>
-              {zine.genre}
-            </span>
-          </div>
 
           {/* Pages indicator */}
           <div className="absolute bottom-3 right-3">

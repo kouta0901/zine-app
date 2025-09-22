@@ -955,90 +955,95 @@ app.post("/cover", async (req, res) => {
     const genre = detectGenre(synopsis, title);
     console.log("📖 Detected genre:", genre);
 
-    // 🎨 Genre-Specific Visual Styles
-    const getVisualStyle = (detectedGenre: string): string => {
-      const styles: { [key: string]: string } = {
-        "sci-fi": "futuristic technology, neon lights, sleek metallic surfaces, space environments, cyberpunk aesthetics, holographic effects",
-        "fantasy": "mystical landscapes, magical creatures, enchanted forests, ancient castles, ethereal lighting, medieval elements",
-        "romance": "warm romantic atmosphere, soft lighting, intimate settings, elegant compositions, dreamy colors, emotional depth",
-        "mystery": "dark atmospheric mood, shadowy figures, noir lighting, urban environments, suspenseful composition",
-        "horror": "dark and eerie atmosphere, dramatic shadows, ominous environments, gothic elements, tension-building composition",
-        "general": "balanced composition, natural lighting, realistic environments, versatile artistic style"
-      };
-      return styles[detectedGenre] || styles.general;
+    // 🎨 Simplified Keyword Extraction
+    const extractKeywords = (content: string, count: number = 3): string[] => {
+      const keywords: string[] = [];
+      
+      // 基本的なキーワード抽出パターン
+      const patterns = [
+        // 自然・環境
+        /(海|ocean|sea|beach|海岸|波|wave)/gi,
+        /(山|mountain|hill|峰|丘)/gi,
+        /(森|forest|woods|tree|森林|木)/gi,
+        /(空|sky|cloud|雲|青空)/gi,
+        /(夜|night|moon|star|月|星|夜空)/gi,
+        /(朝|morning|sunrise|dawn|夜明け)/gi,
+        /(夕|sunset|evening|夕暮れ|黄昏)/gi,
+        /(雨|rain|storm|嵐|雷)/gi,
+        /(雪|snow|winter|冬)/gi,
+        /(花|flower|bloom|桜|春)/gi,
+        
+        // 都市・建物
+        /(街|city|urban|building|都市|建物)/gi,
+        /(駅|station|train|電車|地下鉄)/gi,
+        /(学校|school|university|大学|教室)/gi,
+        /(家|house|home|住宅|部屋)/gi,
+        /(店|shop|store|商店|レストラン)/gi,
+        /(橋|bridge|川|river|河川)/gi,
+        
+        // 人物・感情
+        /(人|person|people|人間|女性|男性|子供)/gi,
+        /(手|hand|顔|face|目|eye)/gi,
+        /(服|clothes|dress|服装|衣装)/gi,
+        /(車|car|vehicle|自動車|バイク)/gi,
+        
+        // 感情・雰囲気
+        /(平和|peaceful|calm|tranquil|静か)/gi,
+        /(緊張|tension|dramatic|intense|スリル)/gi,
+        /(美し|beautiful|elegant|graceful|美しい)/gi,
+        /(暗|dark|shadow|mysterious|暗い)/gi,
+        /(明る|bright|light|光|輝)/gi,
+        /(悲し|sad|sorrow|悲しい|涙)/gi,
+        /(喜び|joy|happy|楽しい|笑)/gi,
+        /(愛|love|romance|恋|恋愛)/gi,
+        
+        // 抽象概念
+        /(時間|time|時|過去|未来)/gi,
+        /(記憶|memory|思い出|過去)/gi,
+        /(夢|dream|幻想|imagination)/gi,
+        /(希望|hope|願い|祈り)/gi,
+        
+        // 色
+        /(赤|red|赤い)/gi,
+        /(青|blue|青い)/gi,
+        /(緑|green|緑の)/gi,
+        /(紫|purple|violet|紫の)/gi,
+        /(金|gold|golden|金色)/gi,
+        /(銀|silver|silver|銀色)/gi
+      ];
+      
+      for (const pattern of patterns) {
+        const matches = content.match(pattern);
+        if (matches && keywords.length < count) {
+          const uniqueMatch = [...new Set(matches)].slice(0, 1)[0];
+          if (uniqueMatch && !keywords.includes(uniqueMatch)) {
+            keywords.push(uniqueMatch);
+          }
+        }
+      }
+      
+      return keywords.slice(0, count);
     };
 
-    // 🌈 Extract Visual Elements from Synopsis
-    const extractVisualElements = (content: string): string => {
-      const visualTerms: string[] = [];
+    // 小説からキーワードを3つ抽出
+    const novelKeywords = extractKeywords(synopsis, 3);
+    
+    // フロントエンドから送信されたキーワードを取得
+    const userKeywords = keywords || [];
+    
+    // 小説キーワードとユーザーキーワードを結合
+    const allKeywords = [...novelKeywords, ...userKeywords].slice(0, 6); // 最大6つまで
+    
+    console.log("📖 Novel keywords:", novelKeywords);
+    console.log("🎯 User keywords:", userKeywords);
+    console.log("🔗 Combined keywords:", allKeywords);
 
-      // Nature elements
-      if (content.match(/(海|ocean|sea|beach)/i)) visualTerms.push("ocean coastline with waves");
-      if (content.match(/(山|mountain|hill)/i)) visualTerms.push("mountain landscape");
-      if (content.match(/(森|forest|woods|tree)/i)) visualTerms.push("lush forest scenery");
-      if (content.match(/(空|sky|cloud)/i)) visualTerms.push("dramatic sky with clouds");
-      if (content.match(/(夜|night|moon|star)/i)) visualTerms.push("night sky with celestial elements");
-      if (content.match(/(朝|morning|sunrise|dawn)/i)) visualTerms.push("golden morning light");
-      if (content.match(/(夕|sunset|evening)/i)) visualTerms.push("warm sunset atmosphere");
+    // 🎨 Simplified Cover Prompt
+    const coverPrompt = `Create a compelling book cover illustration for this story:
 
-      // Urban elements
-      if (content.match(/(街|city|urban|building)/i)) visualTerms.push("modern city architecture");
-      if (content.match(/(駅|station|train)/i)) visualTerms.push("transportation hub atmosphere");
-      if (content.match(/(学校|school|university)/i)) visualTerms.push("academic institution setting");
+STORY: "${synopsis.substring(0, 300)}${synopsis.length > 300 ? '...' : ''}"
 
-      // Emotional atmosphere
-      if (content.match(/(平和|peaceful|calm|tranquil)/i)) visualTerms.push("serene and peaceful atmosphere");
-      if (content.match(/(緊張|tension|dramatic|intense)/i)) visualTerms.push("dynamic and intense composition");
-      if (content.match(/(美し|beautiful|elegant|graceful)/i)) visualTerms.push("aesthetically beautiful elements");
-      if (content.match(/(暗|dark|shadow|mysterious)/i)) visualTerms.push("dramatic shadows and contrast");
-
-      return visualTerms.length > 0 ? visualTerms.slice(0, 3).join(", ") : "atmospheric visual storytelling";
-    };
-
-    // 🎨 Build Concrete Visual Prompt
-    const visualStyle = getVisualStyle(genre);
-    const visualElements = extractVisualElements(synopsis);
-
-    // 🌟 KEYWORD INTEGRATION
-    let additionalElements = "";
-    if (keywords && keywords.length > 0) {
-      additionalElements = `, incorporating elements: ${keywords.join(', ')}`;
-      console.log("✨ User keywords integrated:", keywords);
-    }
-
-    // 🎨 ULTRA CONCRETE VISUAL PROMPT
-    const coverPrompt = `Create a realistic, detailed book cover illustration with these exact specifications:
-
-GENRE: ${genre.toUpperCase()}
-VISUAL STYLE: ${visualStyle}
-SPECIFIC ELEMENTS: ${visualElements}${additionalElements}
-
-MANDATORY VISUAL REQUIREMENTS:
-- Photo-realistic illustration style (NOT abstract art)
-- 3:4 vertical book cover format
-- Cinematic composition with dramatic lighting
-- Rich textures and realistic materials
-- Clear depth of field with focused foreground
-- Professional book cover aesthetic
-
-CONCRETE VISUAL DETAILS TO INCLUDE:
-- Realistic human characters if story involves people
-- Actual environments and landscapes (not symbols)
-- Specific objects mentioned in the story
-- Realistic lighting conditions (dawn/dusk/night/day)
-- Detailed backgrounds with architectural or natural elements
-- Vivid, saturated colors appropriate to the mood
-
-STORY CONTEXT FOR VISUAL REFERENCE:
-"${synopsis.substring(0, 400)}${synopsis.length > 400 ? '...' : ''}"
-
-STRICT CREATIVE DIRECTION:
-- Show real places, people, and objects
-- Use concrete imagery over symbolic representation
-- Focus on specific visual details that tell the story
-- Create a movie poster aesthetic with realistic elements
-- Avoid geometric shapes, abstract patterns, or artistic symbols
-- Render everything with photographic realism
+KEY ELEMENTS: ${allKeywords.join(', ')}
 
 ABSOLUTE PROHIBITION: No text, words, letters, or readable symbols anywhere in the image.`;
 
@@ -1071,10 +1076,9 @@ ABSOLUTE PROHIBITION: No text, words, letters, or readable symbols anywhere in t
           generation_config: {
             response_modalities: ["TEXT", "IMAGE"],  // 画像生成必須
             max_output_tokens: 8192,
-            temperature: 0.8,
-            // 🛡️ 文字禁止パラメータ強化
-            top_p: 0.9,
-            top_k: 40,
+            temperature: 1.2,  // より創造的
+            top_p: 0.95,       // より多様な選択肢
+            top_k: 50,         // より多くの候補から選択
             candidate_count: 1
           },
           // 🚫 テキスト抑制強化設定（generation_configから独立）
@@ -1101,7 +1105,7 @@ ABSOLUTE PROHIBITION: No text, words, letters, or readable symbols anywhere in t
         console.log("Making direct API call to:", apiUrl);
         console.log("🔍 Concrete Visual Processing Analysis:");
         console.log("  - Detected Genre:", genre);
-        console.log("  - Visual Elements:", visualElements);
+        console.log("  - Combined Keywords:", allKeywords);
         console.log("  - Synopsis length:", synopsis.length);
         console.log("  - Final Prompt length:", coverPrompt.length);
         console.log("🚀 Sending MEGA ULTRA STRICT payload to Vertex AI...");

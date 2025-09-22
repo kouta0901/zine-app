@@ -51,7 +51,7 @@ export function WorksInProgress({ onWorkSelect, onWorkDelete }: WorksInProgressP
               console.log(`✅ Adding draft work to Works in Progress: "${zine.title}" (status: ${zine.status})`)
               savedWorks.push({
                 id: zine.id,
-                title: zine.title || 'Untitled ZINE',
+                title: zine.title || '無題の本',
                 type: 'zine',
                 lastModified: zine.lastModified || zine.createdAt || new Date().toISOString(),
                 cover: zine.coverImageUrl || zine.cover
@@ -96,7 +96,7 @@ export function WorksInProgress({ onWorkSelect, onWorkDelete }: WorksInProgressP
               console.log(`✅ Adding localStorage draft work: "${zineData.title}" (status: ${zineData.status || "undefined (treated as draft)"})`)
               savedWorks.push({
                 id: zineData.id || key,
-                title: zineData.title || 'Untitled ZINE',
+                title: zineData.title || '無題の本',
                 type: 'zine',
                 lastModified: zineData.lastModified || zineData.createdAt || new Date().toISOString(),
                 cover: zineData.coverImageUrl || zineData.cover
@@ -183,7 +183,7 @@ export function WorksInProgress({ onWorkSelect, onWorkDelete }: WorksInProgressP
       <div className="mb-12">
         <div className="mb-6">
           <h2 className="text-2xl font-bold mb-2" style={{ color: "#4a3c28" }}>
-            作成中の作品
+            作成中の本
           </h2>
           <p style={{ color: "#8b7355" }}>
             読み込み中...
@@ -203,7 +203,7 @@ export function WorksInProgress({ onWorkSelect, onWorkDelete }: WorksInProgressP
       >
         <div className="mb-6">
           <h2 className="text-2xl font-bold mb-2" style={{ color: "#4a3c28" }}>
-            作成中の作品
+            作成中の本
           </h2>
           <p style={{ color: "#8b7355" }}>
             読み込み中...
@@ -226,10 +226,10 @@ export function WorksInProgress({ onWorkSelect, onWorkDelete }: WorksInProgressP
     >
       <div className="mb-6">
         <h2 className="text-2xl font-bold mb-2" style={{ color: "#4a3c28" }}>
-          作成中の作品
+          作成中の本
         </h2>
         <p style={{ color: "#8b7355" }}>
-          保存した作品を続きから編集できます
+          保存した本を続きから編集できます
         </p>
       </div>
 

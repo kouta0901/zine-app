@@ -310,17 +310,17 @@ export async function updateZine(id: string, zineData: any): Promise<{ id: strin
   try {
     console.log(`🔄 Updating ZINE: ${id}`)
 
-    const response = await fetch(`${API_BASE}/zines/${id}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(zineData),
-    });
+  const response = await fetch(`${API_BASE}/zines/${id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(zineData),
+  });
 
-    if (!response.ok) {
-      throw new Error(`Failed to update ZINE: ${response.statusText}`);
-    }
+  if (!response.ok) {
+    throw new Error(`Failed to update ZINE: ${response.statusText}`);
+  }
 
     const result = await response.json();
 

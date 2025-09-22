@@ -21,7 +21,6 @@ const mockZines = [
     author: "Alex Chen",
     cover: "/placeholder.svg?height=400&width=300",
     pages: 12,
-    genre: "Photography",
     createdAt: "2024-01-15",
     isOwned: true,
   },
@@ -31,7 +30,6 @@ const mockZines = [
     author: "Sarah Kim",
     cover: "/placeholder.svg?height=400&width=300",
     pages: 8,
-    genre: "Art",
     createdAt: "2024-01-10",
     isOwned: true,
   },
@@ -41,7 +39,6 @@ const mockZines = [
     author: "Maya Rodriguez",
     cover: "/placeholder.svg?height=400&width=300",
     pages: 16,
-    genre: "Digital Art",
     createdAt: "2024-01-08",
     isOwned: false,
   },
@@ -51,7 +48,6 @@ const mockZines = [
     author: "Tom Wilson",
     cover: "/placeholder.svg?height=400&width=300",
     pages: 20,
-    genre: "Nature",
     createdAt: "2024-01-05",
     isOwned: false,
   },
@@ -61,7 +57,6 @@ const mockZines = [
     author: "Luna Park",
     cover: "/placeholder.svg?height=400&width=300",
     pages: 14,
-    genre: "Fiction",
     createdAt: "2024-01-03",
     isOwned: false,
   },
@@ -71,7 +66,6 @@ const mockZines = [
     author: "David Lee",
     cover: "/placeholder.svg?height=400&width=300",
     pages: 10,
-    genre: "Design",
     createdAt: "2024-01-01",
     isOwned: false,
   },
@@ -161,7 +155,6 @@ export default function ZineApp() {
               author: zine.author || "You",
               cover: zine.coverImageUrl || zine.thumbnail || zine.cover || "/placeholder.svg?height=400&width=300",
               pages: zine.novelPages?.length || zine.pages?.length || 1,
-              genre: zine.category || "Fiction",
               createdAt: zine.publishedDate || zine.createdAt,
               isOwned: true,
               isPublished: true
@@ -416,7 +409,6 @@ export default function ZineApp() {
             author: zine.author || "You",
             cover: finalCover,
             pages: zine.novelPages?.length || zine.pages?.length || 1,
-            genre: zine.category || "Fiction",
             createdAt: zine.publishedDate || zine.createdAt,
             isOwned: true,
             isPublished: true
@@ -547,7 +539,7 @@ export default function ZineApp() {
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4" style={{ color: "#8b7355" }} />
                       <Input
-                        placeholder="Search ZINEs..."
+                        placeholder="Search Books..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="pl-10 w-64 border rounded-lg focus:outline-none focus:ring-2"

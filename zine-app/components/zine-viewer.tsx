@@ -13,7 +13,6 @@ interface Zine {
   author: string
   cover: string
   pages: number
-  genre: string
   createdAt: string
 }
 
@@ -220,7 +219,7 @@ export function ZineViewer({ zine, zineData, onBack, onEdit }: ZineViewerProps) 
       </div>
 
       {/* Main Content Area */}
-      <div className="relative w-full max-w-4xl h-[80vh] flex items-center justify-center">
+      <div className="relative w-full max-w-7xl h-[90vh] flex items-center justify-center">
         <AnimatePresence mode="wait">
           {isOnCover ? (
             // Cover Page
@@ -244,16 +243,15 @@ export function ZineViewer({ zine, zineData, onBack, onEdit }: ZineViewerProps) 
                     }}
                   />
                 </div>
-                <div className="absolute inset-0 flex items-end p-8">
-                  <div className="bg-black/70 backdrop-blur-sm rounded-lg p-6 w-full">
-                    <h1 className="text-3xl font-bold text-white mb-2">{zine.title}</h1>
-                    <p className="text-white/80">by {zine.author}</p>
-                    {zine.createdAt && (
-                      <p className="text-white/60 text-sm mt-2">
-                        {new Date(zine.createdAt).toLocaleDateString()}
-                      </p>
-                    )}
-                  </div>
+                {/* Cover info moved below image */}
+                <div className="mt-6 p-6 bg-white/90 backdrop-blur-sm rounded-lg shadow-lg">
+                  <h1 className="text-3xl font-bold text-gray-800 mb-2">{zine.title}</h1>
+                  <p className="text-gray-600">by {zine.author}</p>
+                  {zine.createdAt && (
+                    <p className="text-gray-500 text-sm mt-2">
+                      {new Date(zine.createdAt).toLocaleDateString()}
+                    </p>
+                  )}
                 </div>
               </div>
             </motion.div>
@@ -268,7 +266,7 @@ export function ZineViewer({ zine, zineData, onBack, onEdit }: ZineViewerProps) 
               exit={{ opacity: 0, x: -100 }}
               transition={{ duration: 0.3 }}
             >
-              <div className="bg-white rounded-lg shadow-2xl p-12 max-w-3xl w-full max-h-[70vh] overflow-y-auto">
+              <div className="bg-white rounded-lg shadow-2xl p-12 max-w-5xl w-full max-h-[70vh] overflow-y-auto">
                 <div className="prose prose-lg max-w-none" style={{ color: "#4a3c28" }}>
                   <div className="relative min-h-[400px]">
                     {/* Render all elements for current page */}

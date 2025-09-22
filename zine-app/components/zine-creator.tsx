@@ -85,7 +85,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
   const [chatInput, setChatInput] = useState("")
   const [novelContent, setNovelContent] = useState("")
   const [bookTheme, setBookTheme] = useState<"light" | "sepia" | "dark">("light")
-  const [currentNovelPage, setCurrentNovelPage] = useState(1)
+  const [currentNovelPage, setCurrentNovelPage] = useState(0)
   const [novelPages, setNovelPages] = useState<string[]>([])
 
   const [selectedText, setSelectedText] = useState<TextSelection | null>(null)
@@ -331,12 +331,13 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
   // テキスト分割機能（小説モード用）- 最適化版
   const splitNovelContent = (content: string): string[] => {
     if (!content.trim()) return []
-
-    // 動的文字数計算 - 実際の表示領域に基づく最適化
-    // NovelViewer の表示領域: px-12 py-20 h-full
-    // フォント: 16px, 行間: 2.2, 実効高さ: 約600px
-    // 1行: 約30文字 × 約18行 = 540文字/ページ × 2倍マージン = 約1080文字
-    const CHARS_PER_PAGE = 1080 // 動的最適化: 実際の表示領域に正確に対応
+    
+    // 厳格な文字数計算 - ページ数との重なりを完全に防ぐための最適化
+    // NovelViewer の表示領域: px-12 py-20 h-full pb-16
+    // フォント: 16px, 行間: 2.2, 実効高さ: 約500px (pb-16を考慮)
+    // ページ数表示エリア: bottom-6 (約24px) + 安全マージン
+    // 1行: 約30文字 × 約12行 = 360文字/ページ (ページ数との重なりを完全に防止)
+    const CHARS_PER_PAGE = 360 // ページ数との重なりを完全に防ぐ厳格な設定
     
     const paragraphs = content.split('\n\n')
     const pages: string[] = []
@@ -344,7 +345,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
     
     for (const paragraph of paragraphs) {
       const paragraphWithBreak = paragraph + '\n\n'
-
+      
       // 段落がページ制限を超える場合の改良ロジック
       if (currentPage.length + paragraphWithBreak.length <= CHARS_PER_PAGE) {
         currentPage += paragraphWithBreak
@@ -352,7 +353,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
         // 現在のページが空でない場合のみページを追加（段落の途中で分割を避ける）
         if (currentPage.trim()) {
           pages.push(currentPage.trim())
-          currentPage = paragraphWithBreak
+        currentPage = paragraphWithBreak
         } else {
           // 現在のページが空の場合は長い段落を文単位で分割
           const sentences = paragraph.split('。')
@@ -395,7 +396,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
       const rightPage = pages[i + 1] || ""
 
       // 左ページが極端に短く、右ページが存在する場合の調整
-      if (leftPage.length < 200 && rightPage.length > 600) {
+      if (leftPage.length < 120 && rightPage.length > 400) {
         // 右ページから一部を左ページに移動
         const rightSentences = rightPage.split('。')
         const moveCount = Math.min(2, Math.floor(rightSentences.length / 3))
@@ -422,13 +423,13 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
 
   // 小説モード用のページナビゲーション
   const goToPreviousNovelPage = () => {
-    if (currentNovelPage > 1) {
+    if (currentNovelPage > 0) {
       setCurrentNovelPage(currentNovelPage - 1)
     }
   }
 
   const goToNextNovelPage = () => {
-    if (currentNovelPage < Math.max(1, Math.ceil(novelPages.length / 2))) {
+    if (currentNovelPage < Math.max(0, Math.ceil(novelPages.length / 2) - 1)) {
       setCurrentNovelPage(currentNovelPage + 1)
     }
   }
@@ -989,11 +990,11 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
         setTextSuggestions((prev) => [...prev, newSuggestion])
 
         const aiResponse = {
-          id: (Date.now() + 1).toString(),
+        id: (Date.now() + 1).toString(),
           type: "ai" as const,
           content: `「${inputContent}」の指示に基づいて修正提案を作成しました。右側の吹き出しで確認してください。`,
-          timestamp: new Date(),
-        }
+        timestamp: new Date(),
+      }
 
         setReviewChatMessages((prev) => [...prev, aiResponse])
       }
@@ -1624,7 +1625,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
   // Configuration states
   const [conceptConfig, setConceptConfig] = useState({
     length: "short",
-    genre: "sf",
+    genre: "mystery",
     keywords: ""
   })
   const [aiWriterConfig, setAiWriterConfig] = useState({
@@ -1640,7 +1641,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
   })
 
   const hasZineContent = pages.some((page) => page.elements.length > 0) || zineTitle.trim() !== ""
-  
+
   // 新しい直接キャプチャ方式のZINEページ画像化関数
   const captureCurrentZinePage = async (): Promise<string> => {
     console.log('🎯 Capturing current ZINE page with direct DOM approach...')
@@ -2117,90 +2118,76 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
       .join(" | ")
   }
 
-  // 🎨 ULTRA ENHANCED Visual Summary Generator (NO TEXT VERSION)
-  const extractVisualSummary = (novelText: string): string => {
-    console.log("🎨 Starting ULTRA_ENHANCED visual extraction...")
-    const lines = novelText.split('\n').filter(line => line.trim() !== '')
+  // 🎨 キーワード抽出関数（直接キーワードを返す）
+  const extractKeywords = (content: string, count: number = 3): string[] => {
+    console.log("🎨 Starting keyword extraction...")
+    const keywords: string[] = []
     
-    // 🌟 EXPANDED Visual & Emotional Keywords
-    const visualKeywords = [
-      // Nature & Landscape (自然・風景)
-      '景色', '風景', '自然', '空', '雲', '山', '海', '川', '森', '木', '花', '草',
-      '夕日', '朝日', '月', '星', '雨', '雪', '風', '霧', '虹', '湖', '野原', '丘',
-      // Colors & Light (色彩・光)
-      '色', '光', '影', '明るい', '暗い', '赤', '青', '緑', '黄', '紫', '金', '銀',
-      '輝く', '眩しい', '薄暗い', '透明', 'キラキラ', '煌めく', '鮮やか', '淡い',
-      // Architecture & Settings (建築・設定)
-      '街', '建物', '家', '窓', '道', '橋', '駅', '公園', '庭', '部屋', '店', '塔',
-      // Weather & Atmosphere (天候・雰囲気)
-      '晴れ', '曇り', '嵐', '穏やか', '静寂', '賑やか', '涼しい', '暖かい',
-      // Time & Season (時間・季節)
-      '朝', '昼', '夕方', '夜', '春', '夏', '秋', '冬', '季節', '時間'
+    // 基本的なキーワード抽出パターン
+    const patterns = [
+      // 自然・環境
+      /(海|ocean|sea|beach|海岸|波|wave)/gi,
+      /(山|mountain|hill|峰|丘)/gi,
+      /(森|forest|woods|tree|森林|木)/gi,
+      /(空|sky|cloud|雲|青空)/gi,
+      /(夜|night|moon|star|月|星|夜空)/gi,
+      /(朝|morning|sunrise|dawn|夜明け)/gi,
+      /(夕|sunset|evening|夕暮れ|黄昏)/gi,
+      /(雨|rain|storm|嵐|雷)/gi,
+      /(雪|snow|winter|冬)/gi,
+      /(花|flower|bloom|桜|春)/gi,
+      
+      // 都市・建物
+      /(街|city|urban|building|都市|建物)/gi,
+      /(駅|station|train|電車|地下鉄)/gi,
+      /(学校|school|university|大学|教室)/gi,
+      /(家|house|home|住宅|部屋)/gi,
+      /(店|shop|store|商店|レストラン)/gi,
+      /(橋|bridge|川|river|河川)/gi,
+      
+      // 人物・感情
+      /(人|person|people|人間|女性|男性|子供)/gi,
+      /(手|hand|顔|face|目|eye)/gi,
+      /(服|clothes|dress|服装|衣装)/gi,
+      /(車|car|vehicle|自動車|バイク)/gi,
+      
+      // 感情・雰囲気
+      /(平和|peaceful|calm|tranquil|静か)/gi,
+      /(緊張|tension|dramatic|intense|スリル)/gi,
+      /(美し|beautiful|elegant|graceful|美しい)/gi,
+      /(暗|dark|shadow|mysterious|暗い)/gi,
+      /(明る|bright|light|光|輝)/gi,
+      /(悲し|sad|sorrow|悲しい|涙)/gi,
+      /(喜び|joy|happy|楽しい|笑)/gi,
+      /(愛|love|romance|恋|恋愛)/gi,
+      
+      // 抽象概念
+      /(時間|time|時|過去|未来)/gi,
+      /(記憶|memory|思い出|過去)/gi,
+      /(夢|dream|幻想|imagination)/gi,
+      /(希望|hope|願い|祈り)/gi,
+      
+      // 色
+      /(赤|red|赤い)/gi,
+      /(青|blue|青い)/gi,
+      /(緑|green|緑の)/gi,
+      /(紫|purple|violet|紫の)/gi,
+      /(金|gold|golden|金色)/gi,
+      /(銀|silver|silver|銀色)/gi
     ]
     
-    const emotionalKeywords = [
-      // Emotional States (感情状態)
-      '平和', '希望', '憂鬱', '喜び', '悲しみ', '緊張', '安らぎ', '興奮', 
-      '恐怖', '愛', '孤独', '温かさ', '清涼感', '重厚感', '軽やか', 
-      '美しい', '幻想的', '神秘的', 'ノスタルジック', 'ロマンチック', '優雅'
-    ]
-    
-    // 💎 Extract Visual & Emotional Lines with Enhanced Filtering
-    const meaningfulLines = lines.filter(line => {
-      // ❌ STRICT EXCLUSIONS - Prevent text elements
-      if (line.match(/^(タイトル|概要|設定|ジャンル|キャラクター|登場人物|あらすじ|シナリオ|Chapter|第.章|Scene|場面)[:：]/i)) {
-        return false
+    for (const pattern of patterns) {
+      const matches = content.match(pattern)
+      if (matches && keywords.length < count) {
+        const uniqueMatch = [...new Set(matches)].slice(0, 1)[0]
+        if (uniqueMatch && !keywords.includes(uniqueMatch)) {
+          keywords.push(uniqueMatch)
+        }
       }
-      
-      // ❌ Skip dialogue and quotations completely
-      if (line.includes('「') || line.includes('』') || line.includes('"') || line.includes('『') || line.includes('』')) {
-        return false
-      }
-      
-      // ❌ Skip character names and specific references
-      if (line.match(/[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]+さん|[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]+君|[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]+ちゃん/)) {
-        return false
-      }
-      
-      // ✅ Include lines with visual or emotional content
-      return visualKeywords.some(keyword => line.includes(keyword)) ||
-             emotionalKeywords.some(keyword => line.includes(keyword))
-    })
-    
-    // 🎭 Convert to Abstract Artistic Concepts
-    const abstractDescriptions = meaningfulLines
-      .slice(0, 6) // Take more lines for richer description
-      .map(line => {
-        // 🔄 Transform specific content into abstract concepts
-        let abstract = line
-          .replace(/[「」『』"'"]/g, '') // Remove all quotation marks
-          .replace(/[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]+さん|[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]+君|[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]+ちゃん/g, 'silhouette') // Names → silhouettes
-          .replace(/[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]{2,}学校|[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]{2,}大学/g, 'architectural structure') // Schools → architecture
-          .replace(/[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]{2,}市|[A-Za-z\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]{2,}町/g, 'urban landscape') // Cities → landscapes
-          .replace(/電話|メール|スマホ|パソコン/g, '') // Remove currentModern tech references
-        
-        return abstract.trim()
-      })
-      .filter(desc => desc.length > 0)
-    
-    // 🎨 Create Ultra-Abstract Artistic Description
-    if (abstractDescriptions.length === 0) {
-      // 🆘 Fallback: Pure abstract concepts
-      return "Visual essence: Gentle atmospheric composition with soft lighting gradients. Emotional color palette expressing tranquil mood through natural harmony. Abstract interpretation: flowing organic shapes in warm earth tones with ethereal light effects."
     }
     
-    const visualEssence = abstractDescriptions.join(' ')
-    
-    // 🌟 Final Abstract Transformation
-    const ultraAbstractDescription = `
-      Visual essence: ${visualEssence}
-      Artistic interpretation: Express this through pure colors, atmospheric lighting, and organic compositions
-      Mood translation: Convert these elements into visual metaphors using color temperature, light/shadow interplay, and abstract forms
-      Style guide: Like a wordless painting that captures emotional resonance through visual harmony alone
-    `.replace(/\s+/g, ' ').trim()
-    
-    console.log("✨ Generated ultra-abstract description:", ultraAbstractDescription)
-    return ultraAbstractDescription
+    console.log("✨ Extracted keywords:", keywords)
+    return keywords.slice(0, count)
   }
 
   // 小説化機能（画像ベース）
@@ -2263,8 +2250,8 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
         console.log("✅ Image-based novel generation completed")
         setNovelContent(cleanedText)
         const splitPages = splitNovelContent(cleanedText)
-        setNovelPages(splitPages)
-        setCurrentNovelPage(1)
+      setNovelPages(splitPages)
+        setCurrentNovelPage(0)
         setCurrentMode("novel")
       }
       
@@ -2419,19 +2406,19 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
         console.log("🎯 User keywords provided:", keywords)
       }
 
-      // 🎨 Extract ultra-enhanced visual summary (completely text-free)
-      const visualSummary = extractVisualSummary(novelContent)
-      console.log("✨ ULTRA_ENHANCED visual summary:", visualSummary)
+      // 🎨 Extract keywords from novel content
+      const novelKeywords = extractKeywords(novelContent, 3)
+      console.log("✨ Novel keywords:", novelKeywords)
 
-      // 📡 Send to enhanced generateCover API with ultra-strict prompt (no title)
+      // 📡 Send to enhanced generateCover API with keywords
       const result = await generateCover({
-        synopsis: visualSummary, // Ultra-processed, text-free visual summary
-        keywords: keywords // Pass user keywords if provided
+        synopsis: novelContent, // Send full novel content
+        keywords: [...(keywords || []), ...novelKeywords] // Combine user keywords and extracted keywords
         // Deliberately not passing title to prevent any title text from appearing
       })
 
       console.log("📨 Cover generation result:", result)
-
+      
       if (result.url) {
         console.log("✅ Cover generated successfully! URL:", result.url)
         if (keywords && keywords.length > 0) {
@@ -3210,10 +3197,10 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
                           {/* Fixed page numbers at the bottom */}
                           <div className="absolute bottom-6 w-full flex justify-between px-6 z-40">
                             <div className="w-1/2 text-center">
-                              <span className="text-xs" style={{ color: "#a0896c", fontFamily: "serif" }}>{currentNovelPage * 2}</span>
+                              <span className="text-xs" style={{ color: "#a0896c", fontFamily: "serif" }}>{currentNovelPage * 2 + 1}</span>
                             </div>
                             <div className="w-1/2 text-center">
-                              <span className="text-xs" style={{ color: "#a0896c", fontFamily: "serif" }}>{currentNovelPage * 2 + 1}</span>
+                              <span className="text-xs" style={{ color: "#a0896c", fontFamily: "serif" }}>{currentNovelPage * 2 + 2}</span>
                             </div>
                           </div>
 
@@ -3222,7 +3209,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
                             {/* Left page */}
                             <div className="w-1/2 pr-4 relative">
                               <div className="absolute top-6 left-6 text-xs" style={{ color: "#a0896c", fontFamily: "serif" }}>Chapter 1</div>
-                              <div className="px-12 py-20 h-full">
+                              <div className="px-12 py-20 h-full pb-20">
                                 <div
                                   className="text-base leading-8 whitespace-pre-wrap cursor-text h-full"
                                   style={{
@@ -3248,11 +3235,11 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
                                   {(novelPages.length > 0 || novelContent)
                                     ? renderTextWithSuggestions(
                                         novelPages.length > 0
-                                          ? novelPages[(currentNovelPage - 1) * 2] || ""
+                                          ? novelPages[currentNovelPage * 2] || ""
                                           : (() => {
                                               // novelPagesが空でもnovelContentがある場合は動的に分割
                                               const dynamicPages = splitNovelContent(novelContent)
-                                              return dynamicPages[(currentNovelPage - 1) * 2] || ""
+                                              return dynamicPages[currentNovelPage * 2] || ""
                                             })()
                                       )
                                     : renderTextWithSuggestions(`　夕暮れの街角で、彼女は立ち止まった。オレンジ色の光が建物の窓を染め、遠くから聞こえる車の音が都市の鼓動のように響いている。
@@ -3266,7 +3253,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
 
                             {/* Right page */}
                             <div className="w-1/2 pl-4 relative">
-                              <div className="px-12 py-20 h-full">
+                              <div className="px-12 py-20 h-full pb-20">
                                 <div
                                   className="text-base leading-8 whitespace-pre-wrap cursor-text h-full"
                                   style={{
@@ -3292,11 +3279,11 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
                                   {(novelPages.length > 0 || novelContent)
                                     ? (() => {
                                         if (novelPages.length > 0) {
-                                          return novelPages[(currentNovelPage - 1) * 2 + 1] || ""
+                                          return novelPages[currentNovelPage * 2 + 1] || ""
                                         } else if (novelContent) {
                                           // novelPagesが空でもnovelContentがある場合は動的に分割
                                           const dynamicPages = splitNovelContent(novelContent)
-                                          return dynamicPages[(currentNovelPage - 1) * 2 + 1] || ""
+                                          return dynamicPages[currentNovelPage * 2 + 1] || ""
                                         }
                                         return ""
                                       })()
@@ -3319,7 +3306,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
                         variant="outline"
                         size="sm"
                         onClick={goToPreviousNovelPage}
-                        disabled={currentNovelPage <= 1}
+                        disabled={currentNovelPage <= 0}
                         className="border-amber-600 text-amber-600 hover:bg-amber-50 disabled:opacity-50"
                       >
                         <ChevronLeft className="w-4 h-4 mr-1" />
@@ -3332,7 +3319,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
                         color: "#8b6914"
                       }}>
                         <span className="text-sm font-medium">
-                          {currentNovelPage} / {Math.max(1, Math.ceil(novelPages.length / 2))}
+                          見開きページ {currentNovelPage + 1} / {Math.max(1, Math.ceil(novelPages.length / 2))}
                         </span>
                       </div>
                       
@@ -3340,7 +3327,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
                         variant="outline"
                         size="sm"
                         onClick={goToNextNovelPage}
-                        disabled={currentNovelPage >= Math.max(1, Math.ceil(novelPages.length / 2))}
+                        disabled={currentNovelPage >= Math.max(0, Math.ceil(novelPages.length / 2) - 1)}
                         className="border-amber-600 text-amber-600 hover:bg-amber-50 disabled:opacity-50"
                       >
                         次のページ
@@ -3443,7 +3430,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
         cancelText="いいえ"
         variant="warning"
       />
-
+      
       {/* Cover Generation Modal */}
       <CoverGenerationModal
         isOpen={showCoverModal}
