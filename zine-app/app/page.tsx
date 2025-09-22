@@ -146,9 +146,15 @@ export default function ZineApp() {
             return isPublished
           })
           .map((zine: any) => {
-            // Store full data for viewer
+            // Store full data for viewer with enhanced data loading
             publishedDataMap.set(zine.id, zine)
-            
+
+            // 🔥 Debug logging for novel content in published books
+            console.log(`📚 Loading published book: ${zine.title}`)
+            console.log(`  - Has novelContent: ${!!zine.novelContent} (${zine.novelContent?.length || 0} chars)`)
+            console.log(`  - Has novelPages: ${!!zine.novelPages} (${zine.novelPages?.length || 0} pages)`)
+            console.log(`  - Current mode: ${zine.currentMode || 'unknown'}`)
+
             return {
               id: zine.id,
               title: zine.title,
@@ -353,19 +359,45 @@ export default function ZineApp() {
     setViewMode("creator")
   }
 
-  const handleEditWork = (mode: CreatorMode) => {
+  const handleEditWork = async (mode: CreatorMode) => {
     // Edit function for ZineViewer
     if (viewMode === "viewer" && selectedWorkData) {
       console.log('📝 Editing ZINE in', mode, 'mode:', selectedWorkData.title)
       // Set the mode in the data before passing to creator
       setSelectedWorkData({ ...selectedWorkData, currentMode: mode })
       setViewMode("creator")
-    } 
+    }
     // Edit function for NovelViewer
     else if (viewMode === "novel-viewer" && selectedNovel) {
       console.log('📝 Editing Novel in', mode, 'mode:', selectedNovel.title)
-      // Set the mode in the data before passing to creator
-      setSelectedWorkData({ ...selectedNovel, currentMode: mode })
+
+      // 🔥 Enhanced data transfer for novel editing
+      try {
+        console.log('🔍 Fetching complete novel data for editing...')
+        const fullWorkData = await getZineWithDetails(selectedNovel.id)
+
+        if (fullWorkData && fullWorkData.novelContent) {
+          console.log('✅ Full novel data retrieved:')
+          console.log(`  - Novel content: ${fullWorkData.novelContent.length} chars`)
+          console.log(`  - Novel pages: ${fullWorkData.novelPages?.length || 0} pages`)
+
+          // Set complete data with API-fetched content
+          setSelectedWorkData({
+            ...selectedNovel,
+            ...fullWorkData,
+            currentMode: mode
+          })
+        } else {
+          console.warn('⚠️ No complete data found, using cached data')
+          // Fallback to cached data
+          setSelectedWorkData({ ...selectedNovel, currentMode: mode })
+        }
+      } catch (error) {
+        console.error('❌ Failed to fetch complete novel data:', error)
+        // Fallback to cached data
+        setSelectedWorkData({ ...selectedNovel, currentMode: mode })
+      }
+
       setViewMode("creator")
     }
   }

@@ -9,7 +9,7 @@ interface CoverGenerationModalProps {
   onClose: () => void
   isGenerating: boolean
   coverImageUrl: string | null
-  onGenerate: (keywords?: string[]) => void
+  onGenerate: () => void
   onComplete?: () => void
   novelTitle?: string
 }
@@ -112,7 +112,7 @@ export function CoverGenerationModal({
                     AIが小説の内容を解析して、魅力的な表紙デザインを作成します
                   </p>
                   <Button
-                    onClick={() => onGenerate()}
+                    onClick={onGenerate}
                     disabled={isGenerating}
                     className="text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                     style={{
@@ -328,11 +328,7 @@ export function CoverGenerationModal({
                 />
                 <Button
                   onClick={() => {
-                    const keywords = regenerateKeywords
-                      .split(',')
-                      .map(k => k.trim())
-                      .filter(k => k.length > 0);
-                    onGenerate(keywords.length > 0 ? keywords : undefined);
+                    onGenerate();
                     setRegenerateKeywords("");
                   }}
                   disabled={isGenerating}

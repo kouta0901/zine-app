@@ -177,6 +177,16 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
         } else {
           console.log('📝 No original novelPages found, generated from novelContent')
         }
+      } else if (initialData.novelPages && initialData.novelPages.length > 0) {
+        // novelContentが空だがnovelPagesがある場合：novelPagesから復元（レガシーデータ対応）
+        console.log('🔄 No novelContent found, reconstructing from novelPages:', initialData.novelPages.length)
+
+        const reconstructedContent = initialData.novelPages.join('\n\n')
+        setNovelContent(reconstructedContent)
+        setNovelPages(initialData.novelPages)
+
+        console.log('📖 Novel content reconstructed from pages:', reconstructedContent.substring(0, 100) + '...')
+        console.log('📚 Novel pages set from existing data:', initialData.novelPages.length)
       }
 
       // 表紙画像を復元
@@ -2118,78 +2128,6 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
       .join(" | ")
   }
 
-  // 🎨 キーワード抽出関数（直接キーワードを返す）
-  const extractKeywords = (content: string, count: number = 3): string[] => {
-    console.log("🎨 Starting keyword extraction...")
-    const keywords: string[] = []
-    
-    // 基本的なキーワード抽出パターン
-    const patterns = [
-      // 自然・環境
-      /(海|ocean|sea|beach|海岸|波|wave)/gi,
-      /(山|mountain|hill|峰|丘)/gi,
-      /(森|forest|woods|tree|森林|木)/gi,
-      /(空|sky|cloud|雲|青空)/gi,
-      /(夜|night|moon|star|月|星|夜空)/gi,
-      /(朝|morning|sunrise|dawn|夜明け)/gi,
-      /(夕|sunset|evening|夕暮れ|黄昏)/gi,
-      /(雨|rain|storm|嵐|雷)/gi,
-      /(雪|snow|winter|冬)/gi,
-      /(花|flower|bloom|桜|春)/gi,
-      
-      // 都市・建物
-      /(街|city|urban|building|都市|建物)/gi,
-      /(駅|station|train|電車|地下鉄)/gi,
-      /(学校|school|university|大学|教室)/gi,
-      /(家|house|home|住宅|部屋)/gi,
-      /(店|shop|store|商店|レストラン)/gi,
-      /(橋|bridge|川|river|河川)/gi,
-      
-      // 人物・感情
-      /(人|person|people|人間|女性|男性|子供)/gi,
-      /(手|hand|顔|face|目|eye)/gi,
-      /(服|clothes|dress|服装|衣装)/gi,
-      /(車|car|vehicle|自動車|バイク)/gi,
-      
-      // 感情・雰囲気
-      /(平和|peaceful|calm|tranquil|静か)/gi,
-      /(緊張|tension|dramatic|intense|スリル)/gi,
-      /(美し|beautiful|elegant|graceful|美しい)/gi,
-      /(暗|dark|shadow|mysterious|暗い)/gi,
-      /(明る|bright|light|光|輝)/gi,
-      /(悲し|sad|sorrow|悲しい|涙)/gi,
-      /(喜び|joy|happy|楽しい|笑)/gi,
-      /(愛|love|romance|恋|恋愛)/gi,
-      
-      // 抽象概念
-      /(時間|time|時|過去|未来)/gi,
-      /(記憶|memory|思い出|過去)/gi,
-      /(夢|dream|幻想|imagination)/gi,
-      /(希望|hope|願い|祈り)/gi,
-      
-      // 色
-      /(赤|red|赤い)/gi,
-      /(青|blue|青い)/gi,
-      /(緑|green|緑の)/gi,
-      /(紫|purple|violet|紫の)/gi,
-      /(金|gold|golden|金色)/gi,
-      /(銀|silver|silver|銀色)/gi
-    ]
-    
-    for (const pattern of patterns) {
-      const matches = content.match(pattern)
-      if (matches && keywords.length < count) {
-        const uniqueMatch = [...new Set(matches)].slice(0, 1)[0]
-        if (uniqueMatch && !keywords.includes(uniqueMatch)) {
-          keywords.push(uniqueMatch)
-        }
-      }
-    }
-    
-    console.log("✨ Extracted keywords:", keywords)
-    return keywords.slice(0, count)
-  }
-
   // 小説化機能（画像ベース）
   const handleNovelize = async () => {
     console.log("🎬 Starting image-based novel generation...")
@@ -2393,7 +2331,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
     }
   }
 
-  const handleCoverGeneration = async (keywords?: string[]) => {
+  const handleCoverGeneration = async () => {
     if (!novelContent.trim()) {
       notifications.warning("小説が必要です", "表紙を生成するには、まず小説を生成してください")
       return
@@ -2401,29 +2339,17 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
 
     setIsGeneratingCover(true)
     try {
-      console.log("🚀 Starting ULTRA_STRICT cover generation process...")
-      if (keywords && keywords.length > 0) {
-        console.log("🎯 User keywords provided:", keywords)
-      }
+      console.log("🚀 Starting simplified cover generation process...")
 
-      // 🎨 Extract keywords from novel content
-      const novelKeywords = extractKeywords(novelContent, 3)
-      console.log("✨ Novel keywords:", novelKeywords)
-
-      // 📡 Send to enhanced generateCover API with keywords
+      // 📡 Send to simplified generateCover API - let AI decide everything
       const result = await generateCover({
-        synopsis: novelContent, // Send full novel content
-        keywords: [...(keywords || []), ...novelKeywords] // Combine user keywords and extracted keywords
-        // Deliberately not passing title to prevent any title text from appearing
+        synopsis: novelContent // Send only novel content, let AI handle the rest
       })
 
       console.log("📨 Cover generation result:", result)
-      
+
       if (result.url) {
         console.log("✅ Cover generated successfully! URL:", result.url)
-        if (keywords && keywords.length > 0) {
-          console.log("🎨 Enhanced with keywords:", keywords.join(', '))
-        }
         setCoverImageUrl(result.url)
         notifications.coverGenerated()
 
