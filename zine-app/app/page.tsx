@@ -10,6 +10,7 @@ import { ZineViewer } from "@/components/zine-viewer"
 import { ZineCreator } from "@/components/zine-creator"
 import { NovelViewer } from "@/components/novel-viewer"
 import { CustomCursor } from "@/components/custom-cursor"
+import { NotificationContainer } from "@/components/notification"
 import { getZineWithDetails, getZines, deleteZine } from "@/lib/api"
 import { SavedZineData, CreatorMode } from "@/types/zine"
 
@@ -481,15 +482,16 @@ export default function ZineApp() {
 
   return (
     <div className="min-h-screen overflow-hidden relative" style={{
-      background: `linear-gradient(135deg, 
-        #f7f1e8 0%, 
-        #f5ede1 25%, 
-        #f3e9d4 50%, 
-        #f1e5c7 75%, 
+      background: `linear-gradient(135deg,
+        #f7f1e8 0%,
+        #f5ede1 25%,
+        #f3e9d4 50%,
+        #f1e5c7 75%,
         #ede0ba 100%
       )`,
       color: "#4a3c28"
     }}>
+      <NotificationContainer />
       {enableMouseMotion && <CustomCursor mouseX={springX} mouseY={springY} />}
 
       {/* Library atmosphere overlay */}

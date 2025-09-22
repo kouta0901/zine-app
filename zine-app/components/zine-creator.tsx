@@ -30,6 +30,7 @@ import { ocrService } from "@/lib/ocr"
 import { imageCaptioningService } from "@/lib/captioning"
 import SpatialAnalysisService from "@/lib/spatial-analysis"
 import { LoadingScreens } from "./LoadingScreens"
+import { notifications } from "./notification"
 import { ZineToolbar } from "./ZineToolbar"
 import { ZineCanvas, ZineCanvasHandle } from "./ZineCanvas"
 import { ZineMenuPanel } from "./ZineMenuPanel"
@@ -189,7 +190,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
       setCurrentMode("zine")
       setZineTitle("")
       setExistingWorkId(null) // Clear existing work ID for new creation
-      setPages([{ id: "page1", elements: [], title: "Page 1-2" }])
+      setPages([{ id: "page0", elements: [], title: "Page 1-2" }])
       setNovelContent("")
       setNovelPages([])
       setCoverImageUrl(null)
@@ -270,7 +271,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
       setNovelPages(splitPages)
     } catch (error) {
       console.error("文体修正エラー:", error)
-      alert(`文体の修正中にエラーが発生しました: ${error instanceof Error ? error.message : '不明なエラー'}`)
+      notifications.error("文体の修正に失敗しました", error instanceof Error ? error.message : "不明なエラーが発生しました")
     } finally {
       setIsModifyingStyle(false)
     }
@@ -291,7 +292,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
       setNovelPages(splitPages)
     } catch (error) {
       console.error("ワンポイント修正エラー:", error)
-      alert(`ワンポイント修正中にエラーが発生しました: ${error instanceof Error ? error.message : '不明なエラー'}`)
+      notifications.error("ワンポイント修正に失敗しました", error instanceof Error ? error.message : "不明なエラーが発生しました")
     } finally {
       setIsApplyingOnepoint(false)
     }
@@ -657,7 +658,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
               <Button
                 onClick={() => {
                   localStorage.setItem('zine-concept-config', JSON.stringify(conceptConfig))
-                  alert('コンセプト設定が保存されました！')
+                  notifications.success("コンセプト設定を保存しました")
                 }}
                 className="w-full text-white"
                 style={{
@@ -712,7 +713,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
               <Button
                 onClick={() => {
                   localStorage.setItem('zine-ai-writer-config', JSON.stringify(aiWriterConfig))
-                  alert('AI作家設定が保存されました！')
+                  notifications.success("AI作家設定を保存しました")
                 }}
                 className="w-full bg-green-600 hover:bg-green-700 text-white"
               >
@@ -788,7 +789,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
               <Button
                 onClick={() => {
                   localStorage.setItem('zine-worldview-config', JSON.stringify(worldviewConfig))
-                  alert('世界観設定が保存されました！')
+                  notifications.success("世界観設定を保存しました")
                 }}
                 className="w-full bg-green-600 hover:bg-green-700 text-white"
               >
@@ -2170,7 +2171,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
       const { images, enhancedData } = await extractZineImages()
 
       if (images.length === 0) {
-        alert("小説化にはZINEページに画像またはテキスト要素が必要です。ページに要素を追加してください。")
+        notifications.warning("コンテンツが必要です", "小説化にはZINEページに画像またはテキスト要素を追加してください")
         return
       } else {
         // 強化版画像ベースの小説生成
@@ -2221,7 +2222,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
       
     } catch (error) {
       console.error("❌ Image-based novel generation error:", error)
-      alert("画像ベース小説生成に失敗しました。ページ内容や画像サイズを確認して再試行してください。")
+      notifications.error("小説生成に失敗しました", "ページ内容や画像サイズを確認して再試行してください")
     } finally {
       setIsGeneratingNovel(false)
     }
@@ -2241,7 +2242,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
   // 保存機能
   const handleSaveZine = async () => {
     if (!hasZineContent && !zineTitle.trim()) {
-      alert("保存するコンテンツがありません。タイトルを入力するか、ページに要素を追加してください。")
+      notifications.warning("保存できません", "タイトルを入力するか、ページに要素を追加してください")
       return
     }
 
@@ -2327,9 +2328,12 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
       const operationEmoji = isExistingWork ? "🔄" : "💾"
 
       if (isComplete) {
-        alert(`✅ 作品が完成し、My Booksに${isExistingWork ? "更新されました" : "追加されました"}！\n${operationEmoji} 操作: ${operationType}\nタイトル: ${zineData.title}\nID: ${result.id}`)
+        notifications.saved(zineData.title, true)
       } else {
-        alert(`📝 作品が下書きとして${operationType}されました。\n${operationEmoji} 操作: ${operationType}\n完成させるには${currentMode === "novel" ? "小説内容と表紙" : "ページ内容と表紙"}の両方が必要です。\nID: ${result.id}`)
+        notifications.info(
+          "下書きを保存しました",
+          `完成させるには${currentMode === "novel" ? "小説内容と表紙" : "ページ内容と表紙"}の両方が必要です`
+        )
       }
 
       // 📚 Published Booksの更新を通知
@@ -2340,7 +2344,10 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
     } catch (error) {
       const operationType = isExistingWork ? "更新" : "保存"
       console.error(`${operationType}エラー:`, error)
-      alert(`ZINEの${operationType}に失敗しました。もう一度お試しください。\n${isExistingWork ? "既存作品ID: " + existingWorkId : "新規作品作成"}`)
+      notifications.error(
+        `作品の${operationType}に失敗しました`,
+        "もう一度お試しください"
+      )
     } finally {
       setIsSaving(false)
     }
@@ -2348,7 +2355,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
 
   const handleCoverGeneration = async (keywords?: string[]) => {
     if (!novelContent.trim()) {
-      alert("表紙を生成するには、まず小説を生成してください。")
+      notifications.warning("小説が必要です", "表紙を生成するには、まず小説を生成してください")
       return
     }
 
@@ -2378,6 +2385,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
           console.log("🎨 Enhanced with keywords:", keywords.join(', '))
         }
         setCoverImageUrl(result.url)
+        notifications.coverGenerated()
 
         // 🎉 Success message with ultra-strict validation note
         if (result.message) {
@@ -2385,7 +2393,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
         }
       } else {
         console.error("❌ Cover generation failed - no URL returned")
-        alert(result.message || "表紙画像の生成に失敗しました。ULTRA_STRICTモードで再試行しています...")
+        notifications.error("表紙生成に失敗しました", "別のスタイルで再試行しています...")
       }
     } catch (error) {
       console.error("🚨 CRITICAL: Cover generation error:", error)
@@ -2402,20 +2410,10 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
 
       // レート制限エラーの特別なハンドリング
       if (errorMessage.includes("API利用制限") || errorMessage.includes("429")) {
-        alert(`⏰ API利用制限に達しました
-
-現在、表紙生成APIの利用制限に達しています。
-少し時間をおいてから再度お試しください。
-
-💡 ヒント: 短時間での連続生成を避けると、より安定してご利用いただけます。`)
+        notifications.rateLimitError()
       } else {
         // その他のエラー
-        alert(`表紙画像の生成に失敗しました。
-
-ULTRA_STRICTモードでの生成中にエラーが発生しました。
-エラー: ${errorMessage}
-
-もう一度お試しいただくか、サポートまでお問い合わせください。`)
+        notifications.error("表紙生成に失敗しました", `生成中にエラーが発生しました: ${errorMessage}`)
       }
     } finally {
       setIsGeneratingCover(false)
@@ -2425,7 +2423,7 @@ ULTRA_STRICTモードでの生成中にエラーが発生しました。
 
   const handleOpenCoverModal = () => {
     if (!novelContent.trim()) {
-      alert("表紙を生成するには、まず小説を生成してください。")
+      notifications.warning("小説が必要です", "表紙を生成するには、まず小説を生成してください")
       return
     }
     setShowCoverModal(true)
