@@ -166,15 +166,16 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
         setNovelContent(initialData.novelContent)
         console.log('📖 Novel content restored:', initialData.novelContent.substring(0, 100) + '...')
 
-        // 小説ページを復元または分割
+        // 常にnovelPagesを生成して整合性を確保（MyBooks編集時の問題修正）
+        const splitPages = splitNovelContent(initialData.novelContent)
+        setNovelPages(splitPages)
+        console.log('📚 Novel pages generated/restored:', splitPages.length)
+
+        // 既存のnovelPagesがあれば検証ログ出力
         if (initialData.novelPages && initialData.novelPages.length > 0) {
-          setNovelPages(initialData.novelPages)
-          console.log('📚 Novel pages restored:', initialData.novelPages.length)
+          console.log('📝 Original novelPages existed:', initialData.novelPages.length, 'but regenerated for consistency')
         } else {
-          // novelPagesがない場合は分割処理を実行
-          const splitPages = splitNovelContent(initialData.novelContent)
-          setNovelPages(splitPages)
-          console.log('📚 Novel pages split:', splitPages.length)
+          console.log('📝 No original novelPages found, generated from novelContent')
         }
       }
 
@@ -1730,7 +1731,43 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
       /loading/gi,
       /エラー/gi,
       /Error/gi,
-      /^(無題|untitled)$/gi
+      /^(無題|untitled)$/gi,
+      // Additional patterns to prevent OCR metadata contamination
+      /\d+%/gi,                    // Zoom percentages (100%, 150%, etc.)
+      /zoom/gi,                    // Zoom-related terms
+      /ズーム/gi,                  // Japanese zoom
+      /layout:/gi,                 // Layout indicators
+      /レイアウト/gi,              // Japanese layout
+      /binding/gi,                 // Binding-related terms
+      /綴じ/gi,                    // Japanese binding
+      /センター/gi,                // Center
+      /center/gi,                  // Center
+      /boundary/gi,                // Boundary
+      /境界/gi,                    // Japanese boundary
+      /indicator/gi,               // Indicator
+      /インジケーター/gi,          // Japanese indicator
+      /canvas/gi,                  // Canvas-related
+      /キャンバス/gi,              // Japanese canvas
+      /background/gi,              // Background
+      /背景/gi,                    // Japanese background
+      /texture/gi,                 // Texture
+      /テクスチャ/gi,              // Japanese texture
+      /element/gi,                 // Element
+      /要素/gi,                    // Japanese element (when standalone)
+      /position/gi,                // Position
+      /位置/gi,                    // Japanese position
+      /coordinate/gi,              // Coordinate
+      /座標/gi,                    // Japanese coordinate
+      /transform/gi,               // Transform
+      /変形/gi,                    // Japanese transform
+      /scale/gi,                   // Scale
+      /スケール/gi,                // Japanese scale
+      /opacity/gi,                 // Opacity
+      /透明度/gi,                  // Japanese opacity
+      /filter/gi,                  // Filter
+      /フィルター/gi,              // Japanese filter
+      /shadow/gi,                  // Shadow
+      /影/gi                       // Japanese shadow (when standalone)
     ]
 
     // Apply all cleanup patterns
@@ -1833,19 +1870,28 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
               i
             )
             
-            // Build spatial context from layout analysis
-            let spatialContext = `Page ${i + 1} layout: `
+            // Build natural spatial context without technical metadata
+            let spatialContext = ''
             if (layout.imageTextPairs.length > 0) {
-              const spatialInfo = layout.imageTextPairs.map(pair => {
-                const relatedTexts = pair.relatedText
-                  .filter(rel => rel.confidence > 0.5)
-                  .map(rel => `${rel.direction}:${rel.element.content?.substring(0, 150) || ''}`)
-                  .join(', ')
-                return `Image with ${pair.relatedText.length} related texts (${relatedTexts})`
-              }).join(' | ')
-              spatialContext += spatialInfo
+              // Focus on content relationships rather than technical layout
+              const naturalRelations = layout.imageTextPairs
+                .filter(pair => pair.relatedText.some(rel => rel.confidence > 0.7))
+                .map(pair => {
+                  const relatedContent = pair.relatedText
+                    .filter(rel => rel.confidence > 0.7 && rel.element.content && rel.element.content.trim())
+                    .map(rel => rel.element.content?.substring(0, 100) || '')
+                    .filter(content => content.length > 10)
+                  return relatedContent.length > 0 ? relatedContent.join('. ') : ''
+                })
+                .filter(content => content.length > 0)
+
+              spatialContext = naturalRelations.length > 0
+                ? naturalRelations.join('. ')
+                : `${imageElements.length}個の画像と${textElements.length}個のテキスト要素を含むシーン`
             } else {
-              spatialContext += `${imageElements.length} images, ${textElements.length} text elements`
+              spatialContext = imageElements.length > 0 || textElements.length > 0
+                ? `${imageElements.length}個の画像と${textElements.length}個のテキスト要素を含むシーン`
+                : 'シンプルな構成'
             }
             
             // Remove technical metadata structure to prevent contamination
@@ -1877,13 +1923,15 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
             console.warn(`⚠️ Enhanced analysis failed for page ${i + 1}, using fallback:`, analysisError)
             // Fallback: no technical descriptions to prevent contamination
             
-            // Store minimal enhanced data
+            // Store minimal enhanced data with natural language
             enhancedData.push({
               imageBase64,
               ocrText: "",
-              caption: `Page ${i + 1} with ${page.elements.length} elements`,
+              caption: `${page.elements.length}個の要素を含むシーン`,
               nearbyText: textElements.map(el => el.content).filter(Boolean).join(' '),
-              spatialContext: `Basic layout: ${imageElements.length} images, ${textElements.length} texts`,
+              spatialContext: imageElements.length > 0 || textElements.length > 0
+                ? `${imageElements.length}個の画像と${textElements.length}個のテキスト要素を含むシーン`
+                : 'シンプルな構成',
               pageIndex: i,
               confidence: 0.3
             })
@@ -2284,6 +2332,11 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
         })
       }))
 
+      // 小説モードの場合、novelPagesを必ず生成して保存
+      const currentNovelPages = currentMode === "novel" && novelContent
+        ? (novelPages.length > 0 ? novelPages : splitNovelContent(novelContent))
+        : novelPages
+
       const zineData = {
         ...(isExistingWork && { id: existingWorkId }), // Include ID only for existing works
         title: zineTitle || "無題",
@@ -2295,7 +2348,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
         conceptConfig: conceptConfig,
         worldviewConfig: worldviewConfig,
         novelContent: novelContent,
-        novelPages: novelPages,
+        novelPages: currentNovelPages, // 🔥 必ずnovelPagesが存在するように保証
         coverImageUrl: coverImageUrl, // 🔥 表紙画像URLを保存データに含める
         createdAt: new Date().toISOString()
       }
@@ -3192,8 +3245,16 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
                                     }
                                   }}
                                 >
-                                  {novelPages.length > 0 
-                                    ? renderTextWithSuggestions(novelPages[(currentNovelPage - 1) * 2] || "")
+                                  {(novelPages.length > 0 || novelContent)
+                                    ? renderTextWithSuggestions(
+                                        novelPages.length > 0
+                                          ? novelPages[(currentNovelPage - 1) * 2] || ""
+                                          : (() => {
+                                              // novelPagesが空でもnovelContentがある場合は動的に分割
+                                              const dynamicPages = splitNovelContent(novelContent)
+                                              return dynamicPages[(currentNovelPage - 1) * 2] || ""
+                                            })()
+                                      )
                                     : renderTextWithSuggestions(`　夕暮れの街角で、彼女は立ち止まった。オレンジ色の光が建物の窓を染め、遠くから聞こえる車の音が都市の鼓動のように響いている。
 
 　「もう戻れないのね」
@@ -3228,8 +3289,17 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
                                     }
                                   }}
                                 >
-                                  {novelPages.length > 0 
-                                    ? novelPages[(currentNovelPage - 1) * 2 + 1] || ""
+                                  {(novelPages.length > 0 || novelContent)
+                                    ? (() => {
+                                        if (novelPages.length > 0) {
+                                          return novelPages[(currentNovelPage - 1) * 2 + 1] || ""
+                                        } else if (novelContent) {
+                                          // novelPagesが空でもnovelContentがある場合は動的に分割
+                                          const dynamicPages = splitNovelContent(novelContent)
+                                          return dynamicPages[(currentNovelPage - 1) * 2 + 1] || ""
+                                        }
+                                        return ""
+                                      })()
                                     : `　角の向こうから現れた猫が、彼女の足元で鳴いた。まるで何かを伝えようとするように。
 
 　「あなたも一人なのね」

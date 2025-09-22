@@ -384,27 +384,28 @@ export const ZineCanvas = forwardRef<ZineCanvasHandle, ZineCanvasProps>(({
       // Wait for the transform to complete
       await new Promise(resolve => setTimeout(resolve, 100))
 
-      // Find the main canvas element (the motion.div with the ZINE content)
-      const canvasElement = containerRef.current.querySelector('.relative.rounded-xl')
-      
+      // Capture only the ZINE content area (data-canvas-bg div) to exclude UI elements
+      const canvasElement = canvasRef.current
+
       if (!canvasElement) {
-        throw new Error('ZINE canvas element not found')
+        throw new Error('ZINE content area not found')
       }
 
       console.log('📸 Capturing canvas element with html2canvas')
       
-      // Capture with html2canvas - optimized for smaller file size
+      // Capture with html2canvas - optimized for smaller file size and content-only capture
       const canvas = await html2canvas(canvasElement as HTMLElement, {
-        width: canvasSize.width,
-        height: canvasSize.height,
         scale: 1, // Reduced from 2 to 1 for smaller file size while maintaining quality
         backgroundColor: '#FFFEF9', // Set explicit background instead of null
         useCORS: true,
         allowTaint: true,
         logging: false, // Reduce console noise
         ignoreElements: (element) => {
-          // Skip elements that might contain problematic CSS
-          return element.tagName === 'STYLE' || element.classList?.contains('ignore-capture')
+          // Skip elements that might contain problematic CSS or UI elements
+          return element.tagName === 'STYLE' ||
+                 element.classList?.contains('ignore-capture') ||
+                 element.closest('[data-zoom-indicator]') !== null ||
+                 element.closest('[data-page-boundary]') !== null
         },
         onclone: (clonedDoc) => {
           // Replace oklch colors with compatible colors in cloned document
