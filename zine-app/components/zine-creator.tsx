@@ -594,95 +594,6 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
     if (!showConfigPanel || currentMode !== "zine") return null
 
     switch (activeMenuSection) {
-      case "concept":
-        return (
-          <div className="space-y-6">
-            <h2 className="text-2xl font-bold mb-6" style={{ color: "#4a3c28" }}>コンセプト設定</h2>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2" style={{ color: "#4a3c28" }}>短編 / 長編</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button 
-                    variant={conceptConfig.length === "short" ? "default" : "outline"} 
-                    className="text-white"
-                    style={{
-                      background: conceptConfig.length === "short" ? "linear-gradient(135deg, #8b6914 0%, #a0751f 100%)" : "transparent",
-                      borderColor: "rgba(139, 115, 85, 0.3)",
-                      color: conceptConfig.length === "short" ? "#fffdf7" : "#8b7355"
-                    }}
-                    onClick={() => setConceptConfig({...conceptConfig, length: "short"})}
-                  >
-                    短編
-                  </Button>
-                  <Button 
-                    variant={conceptConfig.length === "long" ? "default" : "outline"} 
-                    className="text-white"
-                    style={{
-                      background: conceptConfig.length === "long" ? "linear-gradient(135deg, #8b6914 0%, #a0751f 100%)" : "transparent",
-                      borderColor: "rgba(139, 115, 85, 0.3)",
-                      color: conceptConfig.length === "long" ? "#fffdf7" : "#8b7355"
-                    }}
-                    onClick={() => setConceptConfig({...conceptConfig, length: "long"})}
-                  >
-                    長編
-                  </Button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2" style={{ color: "#4a3c28" }}>ジャンル</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button 
-                    variant={conceptConfig.genre === "sf" ? "default" : "outline"} 
-                    className={conceptConfig.genre === "sf" ? "bg-purple-600 text-white" : "text-white border-white/20 hover:bg-white/10 bg-transparent"}
-                    onClick={() => setConceptConfig({...conceptConfig, genre: "sf"})}
-                  >
-                    SF
-                  </Button>
-                  <Button 
-                    variant={conceptConfig.genre === "romance" ? "default" : "outline"} 
-                    className={conceptConfig.genre === "romance" ? "bg-purple-600 text-white" : "text-white border-white/20 hover:bg-white/10 bg-transparent"}
-                    onClick={() => setConceptConfig({...conceptConfig, genre: "romance"})}
-                  >
-                    ラブコメ
-                  </Button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2" style={{ color: "#4a3c28" }}>キーワード</label>
-                <textarea
-                  className="w-full h-24 border rounded-lg p-3"
-                  style={{
-                    background: "rgba(255, 253, 250, 0.8)",
-                    borderColor: "rgba(139, 115, 85, 0.3)",
-                    color: "#4a3c28"
-                  }}
-                  placeholder="作品のキーワードを入力してください..."
-                  value={conceptConfig.keywords}
-                  onChange={(e) => setConceptConfig({...conceptConfig, keywords: e.target.value})}
-                />
-              </div>
-            </div>
-
-            <div className="mt-6 pt-4 border-t" style={{ borderColor: "rgba(139, 115, 85, 0.3)" }}>
-              <Button
-                onClick={() => {
-                  localStorage.setItem('zine-concept-config', JSON.stringify(conceptConfig))
-                  notifications.success("コンセプト設定を保存しました")
-                }}
-                className="w-full text-white"
-                style={{
-                  background: "linear-gradient(135deg, #8b6914 0%, #a0751f 100%)"
-                }}
-              >
-                <Save className="w-4 h-4 mr-2" />
-                設定を保存
-              </Button>
-            </div>
-          </div>
-        )
 
       case "ai-writer":
         return (
@@ -1635,7 +1546,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
   // Configuration states
   const [conceptConfig, setConceptConfig] = useState({
     length: "short",
-    genre: "mystery",
+    genre: "none",
     keywords: ""
   })
   const [aiWriterConfig, setAiWriterConfig] = useState({
@@ -2133,7 +2044,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
     console.log("🎬 Starting image-based novel generation...")
     
     // Convert all data to natural language format to prevent technical contamination
-    const concept = conceptConfig.genre || "自由創作"
+    const concept = conceptConfig.genre === 'none' ? "自由創作" : (conceptConfig.genre || "自由創作")
     const world = `${worldviewConfig.stage || "架空の世界"}を舞台とした${worldviewConfig.scenario || "物語"}として`
     
     setIsGeneratingNovel(true)
