@@ -1609,7 +1609,7 @@ app.get("/zines", async (req, res) => {
             author: zineData.author,
             publishedDate: zineData.publishedDate,
             novelPages: zineData.novelPages,
-            pages: zineData.pages
+            // Exclude pages: containing base64 image data (causes 197MB responses)
           });
         } catch (parseError) {
           console.error(`Error parsing ZINE file ${file.name}:`, parseError);

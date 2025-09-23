@@ -1,6 +1,6 @@
 // 一時的にハードコード（後で環境変数に戻す）
 // 注: 実際のデプロイされたAPI URLを使用
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'https://zine-api-2be2c4ycca-uc.a.run.app';
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'https://zine-api-830716651527.us-central1.run.app';
 
 // API呼び出し用のヘルパー関数
 async function apiCall(endpoint: string, payload: any) {
