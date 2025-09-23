@@ -342,12 +342,12 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
   const splitNovelContent = (content: string): string[] => {
     if (!content.trim()) return []
     
-    // 厳格な文字数計算 - ページ数との重なりを完全に防ぐための最適化
-    // NovelViewer の表示領域: px-12 py-20 h-full pb-16
-    // フォント: 16px, 行間: 2.2, 実効高さ: 約500px (pb-16を考慮)
+    // 最適化された文字数計算 - テキストオーバーフロー問題の根本解決
+    // NovelViewer の表示領域: px-12 py-16 h-full pb-8 (統一パディング)
+    // フォント: 16px, 行間: 2.2, 実効高さ: 約466px
     // ページ数表示エリア: bottom-6 (約24px) + 安全マージン
-    // 1行: 約30文字 × 約12行 = 360文字/ページ (ページ数との重なりを完全に防止)
-    const CHARS_PER_PAGE = 360 // ページ数との重なりを完全に防ぐ厳格な設定
+    // 1行: 約30文字 × 約12.7行 = 380文字/ページ (ページ番号被り完全防止)
+    const CHARS_PER_PAGE = 380 // ページ番号との重複を完全に防ぐ最適化された設定
     
     const paragraphs = content.split('\n\n')
     const pages: string[] = []
@@ -3191,14 +3191,16 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
                             {/* Left page */}
                             <div className="w-1/2 pr-4 relative">
                               <div className="absolute top-6 left-6 text-xs" style={{ color: "#a0896c", fontFamily: "serif" }}>Chapter 1</div>
-                              <div className="px-12 py-20 h-full pb-20">
+                              <div className="px-12 py-16 h-full pb-8">
                                 <div
-                                  className="text-base leading-8 whitespace-pre-wrap cursor-text h-full"
+                                  className="text-base leading-8 whitespace-pre-wrap cursor-text overflow-y-hidden"
                                   style={{
                                     color: currentTheme.text,
                                     fontFamily: 'Georgia, "Times New Roman", serif',
                                     lineHeight: "2.2",
                                     textShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                                    maxHeight: "calc(100% - 2rem)",
+                                    height: "100%"
                                   }}
                                   onMouseUp={handleTextSelection}
                                   onMouseDown={(e) => {
@@ -3235,14 +3237,16 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
 
                             {/* Right page */}
                             <div className="w-1/2 pl-4 relative">
-                              <div className="px-12 py-20 h-full pb-20">
+                              <div className="px-12 py-16 h-full pb-8">
                                 <div
-                                  className="text-base leading-8 whitespace-pre-wrap cursor-text h-full"
+                                  className="text-base leading-8 whitespace-pre-wrap cursor-text overflow-y-hidden"
                                   style={{
                                     color: currentTheme.text,
                                     fontFamily: 'Georgia, "Times New Roman", serif',
                                     lineHeight: "2.2",
                                     textShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                                    maxHeight: "calc(100% - 2rem)",
+                                    height: "100%"
                                   }}
                                   onMouseUp={handleTextSelection}
                                   onMouseDown={(e) => {
