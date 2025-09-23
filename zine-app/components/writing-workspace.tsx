@@ -6,7 +6,7 @@ import { ArrowLeft, Lightbulb, Edit3, CheckCircle, User, Bot, Image, Wand2 } fro
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { review, generateCover } from "@/lib/api"
+import { review } from "@/lib/api"
 
 interface WritingWorkspaceProps {
   project: any
@@ -36,8 +36,6 @@ export function WritingWorkspace({ project, currentPhase, onPhaseChange, onBack 
   const [generatedContent, setGeneratedContent] = useState("")
   const [originalText, setOriginalText] = useState("")
   const [reviewInstruction, setReviewInstruction] = useState("")
-  const [synopsis, setSynopsis] = useState("")
-  const [generatedCoverUrl, setGeneratedCoverUrl] = useState("")
 
   const handleSendMessage = () => {
     if (!userInput.trim()) return
@@ -75,27 +73,6 @@ export function WritingWorkspace({ project, currentPhase, onPhaseChange, onBack 
     }
   }
 
-  // 表紙生成機能
-  const handleGenerateCover = async () => {
-    if (!synopsis) {
-      alert("あらすじを入力してください。")
-      return
-    }
-
-    setIsGenerating(true)
-    try {
-      const result = await generateCover({ synopsis })
-      setGeneratedCoverUrl(result.url)
-      if (result.message) {
-        alert(result.message)
-      }
-    } catch (error) {
-      console.error("表紙生成エラー:", error)
-      alert("表紙の生成に失敗しました。")
-    } finally {
-      setIsGenerating(false)
-    }
-  }
 
   const renderPhaseContent = () => {
     switch (currentPhase) {
@@ -137,11 +114,6 @@ export function WritingWorkspace({ project, currentPhase, onPhaseChange, onBack 
       case 4:
         return (
           <Phase4Content
-            synopsis={synopsis}
-            setSynopsis={setSynopsis}
-            onGenerateCover={handleGenerateCover}
-            generatedCoverUrl={generatedCoverUrl}
-            isGenerating={isGenerating}
             generatedContent={generatedContent}
           />
         )
@@ -441,81 +413,39 @@ function Phase3Content({
   )
 }
 
-// Phase 4: Completion - 表紙生成機能付き
-function Phase4Content({ 
-  synopsis, setSynopsis, onGenerateCover, generatedCoverUrl, isGenerating, generatedContent 
-}: any) {
+// Phase 4: Completion - 原稿完成と出力
+function Phase4Content({ generatedContent }: any) {
   return (
-    <div className="max-w-6xl mx-auto p-6">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+    <div className="max-w-4xl mx-auto p-6">
+      <div className="space-y-6">
         {/* Final Content */}
-        <div className="space-y-6">
-          <div className="bg-white/5 rounded-2xl p-6">
-            <h3 className="text-lg font-bold mb-4">完成原稿</h3>
-            <div className="bg-white/5 rounded-lg p-4 h-64 overflow-y-auto text-sm">
-              {generatedContent || "完成した原稿がここに表示されます..."}
-            </div>
-            <div className="flex gap-2 mt-4">
-              <Button className="bg-green-600 hover:bg-green-700">PDF出力</Button>
-              <Button className="bg-purple-600 hover:bg-purple-700">ZINE形式</Button>
-            </div>
+        <div className="bg-white/5 rounded-2xl p-6">
+          <h3 className="text-lg font-bold mb-4">完成原稿</h3>
+          <div className="bg-white/5 rounded-lg p-4 h-96 overflow-y-auto text-sm">
+            {generatedContent || "完成した原稿がここに表示されます..."}
           </div>
-
-          <div className="bg-white/5 rounded-2xl p-6">
-            <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-              <Image className="w-5 h-5" />
-              AI表紙生成
-            </h3>
-            <Textarea
-              value={synopsis}
-              onChange={(e) => setSynopsis(e.target.value)}
-              placeholder="作品のあらすじを入力してください..."
-              className="bg-white/5 border-white/10 text-white h-20 mb-4"
-            />
-            <Button 
-              onClick={onGenerateCover}
-              disabled={isGenerating || !synopsis}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
-            >
-              {isGenerating ? "表紙生成中..." : "表紙を生成"}
-            </Button>
+          <div className="flex gap-2 mt-4">
+            <Button className="bg-green-600 hover:bg-green-700">PDF出力</Button>
+            <Button className="bg-purple-600 hover:bg-purple-700">ZINE形式</Button>
           </div>
         </div>
 
-        {/* Cover & Evaluation */}
-        <div className="space-y-6">
-          <div className="bg-white/5 rounded-2xl p-6">
-            <h3 className="text-lg font-bold mb-4">生成された表紙</h3>
-            <div className="bg-white/5 rounded-lg aspect-[3/4] flex items-center justify-center">
-              {isGenerating ? (
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500"></div>
-              ) : generatedCoverUrl ? (
-                <img src={generatedCoverUrl} alt="Generated Cover" className="w-full h-full object-cover rounded-lg" />
-              ) : (
-                <div className="text-gray-400 text-center">
-                  <Image className="w-12 h-12 mx-auto mb-2" />
-                  表紙がここに表示されます
-                </div>
-              )}
-            </div>
+        {/* AI評価 */}
+        <div className="bg-white/5 rounded-2xl p-6">
+          <h3 className="text-lg font-bold mb-4">AI評価</h3>
+          <div className="text-center mb-4">
+            <div className="text-3xl font-bold text-green-400">85点</div>
+            <div className="text-sm text-gray-400">総合評価</div>
           </div>
-
-          <div className="bg-white/5 rounded-2xl p-6">
-            <h3 className="text-lg font-bold mb-4">AI評価</h3>
-            <div className="text-center mb-4">
-              <div className="text-3xl font-bold text-green-400">85点</div>
-              <div className="text-sm text-gray-400">総合評価</div>
+          <div className="space-y-3 text-sm">
+            <div>
+              <span className="text-blue-400">構成:</span> 90点 - 論理的で読みやすい
             </div>
-            <div className="space-y-3 text-sm">
-              <div>
-                <span className="text-blue-400">構成:</span> 90点 - 論理的で読みやすい
-              </div>
-              <div>
-                <span className="text-purple-400">創造性:</span> 80点 - 独創的なアイデア
-              </div>
-              <div>
-                <span className="text-orange-400">文章力:</span> 85点 - 表現力豊か
-              </div>
+            <div>
+              <span className="text-purple-400">創造性:</span> 80点 - 独創的なアイデア
+            </div>
+            <div>
+              <span className="text-orange-400">文章力:</span> 85点 - 表現力豊か
             </div>
           </div>
         </div>

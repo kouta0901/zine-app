@@ -9,7 +9,7 @@ interface CoverGenerationModalProps {
   onClose: () => void
   isGenerating: boolean
   coverImageUrl: string | null
-  onGenerate: () => void
+  onGenerate: (userKeywords?: string[]) => void
   onComplete?: () => void
   novelTitle?: string
 }
@@ -27,8 +27,7 @@ export function CoverGenerationModal({
   const [progress, setProgress] = useState(0)
   const [imageLoadError, setImageLoadError] = useState<string | null>(null)
   const [imageLoadSuccess, setImageLoadSuccess] = useState(false)
-  const [regenerateKeywords, setRegenerateKeywords] = useState<string>("")
-  const [showKeywordInput, setShowKeywordInput] = useState(false)
+  const [userKeywords, setUserKeywords] = useState<string>("")
 
   useEffect(() => {
     console.log("CoverGenerationModal - coverImageUrl変更:", coverImageUrl)
@@ -111,19 +110,49 @@ export function CoverGenerationModal({
                   <p className="text-sm mb-4" style={{ color: "#a0896c" }}>
                     AIが小説の内容を解析して、魅力的な表紙デザインを作成します
                   </p>
-                  <Button
-                    onClick={onGenerate}
-                    disabled={isGenerating}
-                    className="text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                    style={{
-                      background: isGenerating
-                        ? "linear-gradient(135deg, #6b5c13 0%, #7a6118 50%, #8b6914 100%)"
-                        : "linear-gradient(135deg, #8b6914 0%, #a0751f 50%, #b8860b 100%)"
-                    }}
-                  >
-                    <Sparkles className="w-4 h-4 mr-2" />
-                    {isGenerating ? "生成中..." : "表紙を生成"}
-                  </Button>
+                  <div className="space-y-4">
+                    {/* User Keywords Input */}
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Tag className="w-4 h-4" style={{ color: "#daa520" }} />
+                        <span className="text-sm font-medium" style={{ color: "#daa520" }}>
+                          カスタムキーワード（オプション）
+                        </span>
+                      </div>
+                      <Input
+                        placeholder="例: 神秘的, 夕日, 金色の光, ファンタジー..."
+                        value={userKeywords}
+                        onChange={(e) => setUserKeywords(e.target.value)}
+                        className="border-amber-300 focus:border-amber-500 focus:ring-amber-500 mb-3"
+                        style={{
+                          background: "rgba(255, 255, 255, 0.9)",
+                          color: "#4a5568"
+                        }}
+                      />
+                      <p className="text-xs mb-4" style={{ color: "#8b7355" }}>
+                        💡 複数のキーワードはカンマで区切ってください。
+                      </p>
+                    </div>
+
+                    <Button
+                      onClick={() => {
+                        const keywords = userKeywords.trim()
+                          ? userKeywords.split(',').map(k => k.trim()).filter(k => k.length > 0)
+                          : []
+                        onGenerate(keywords)
+                      }}
+                      disabled={isGenerating}
+                      className="w-full text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{
+                        background: isGenerating
+                          ? "linear-gradient(135deg, #6b5c13 0%, #7a6118 50%, #8b6914 100%)"
+                          : "linear-gradient(135deg, #8b6914 0%, #a0751f 50%, #b8860b 100%)"
+                      }}
+                    >
+                      <Sparkles className="w-4 h-4 mr-2" />
+                      {isGenerating ? "生成中..." : "表紙を生成"}
+                    </Button>
+                  </div>
                 </motion.div>
               )}
 
@@ -306,7 +335,7 @@ export function CoverGenerationModal({
 
         {/* Footer */}
         <div className="border-t" style={{ borderColor: "rgba(218, 165, 32, 0.2)" }}>
-          {/* Keyword Input Section (only shown when cover exists) */}
+          {/* Keyword Input Section for Regeneration (only shown when cover exists) */}
           {coverImageUrl && !isGenerating && (
             <div className="p-4 border-b" style={{ borderColor: "rgba(218, 165, 32, 0.1)", background: "rgba(218, 165, 32, 0.02)" }}>
               <div className="flex items-center gap-2 mb-3">
@@ -318,8 +347,8 @@ export function CoverGenerationModal({
               <div className="flex gap-3">
                 <Input
                   placeholder="例: 神秘的, 夕日, 金色の光, ファンタジー..."
-                  value={regenerateKeywords}
-                  onChange={(e) => setRegenerateKeywords(e.target.value)}
+                  value={userKeywords}
+                  onChange={(e) => setUserKeywords(e.target.value)}
                   className="flex-1 border-amber-300 focus:border-amber-500 focus:ring-amber-500"
                   style={{
                     background: "rgba(255, 255, 255, 0.9)",
@@ -328,8 +357,11 @@ export function CoverGenerationModal({
                 />
                 <Button
                   onClick={() => {
-                    onGenerate();
-                    setRegenerateKeywords("");
+                    const keywords = userKeywords.trim()
+                      ? userKeywords.split(',').map(k => k.trim()).filter(k => k.length > 0)
+                      : []
+                    onGenerate(keywords);
+                    setUserKeywords("");
                   }}
                   disabled={isGenerating}
                   className="text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed"

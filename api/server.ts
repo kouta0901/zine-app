@@ -914,247 +914,37 @@ app.post("/embed", async (req, res) => {
 // 3. 表紙画像生成エンドポイント
 app.post("/cover", async (req, res) => {
   try {
-    const { synopsis } = req.body;
-    
-    if (!synopsis) {
-      return res.status(400).json({ error: "synopsis is required" });
+    const { zineKeywords, novelKeywords, userKeywords } = req.body;
+
+    console.log("Cover generation requested with keywords:");
+    console.log("  - ZINE keywords:", zineKeywords);
+    console.log("  - Novel keywords:", novelKeywords);
+    console.log("  - User keywords:", userKeywords);
+
+    // 🎨 Simple Keyword-Based Cover Generation
+    console.log("🎨 Initializing keyword-based cover generation...");
+
+    // シンプルなキーワードベースプロンプト生成
+    const formatKeywords = (keywords: string[] | undefined): string => {
+      return keywords && keywords.length > 0 ? keywords.join(', ') : 'なし';
+    };
+
+    const zineKeywordsStr = formatKeywords(zineKeywords);
+    const novelKeywordsStr = formatKeywords(novelKeywords);
+    const userKeywordsStr = formatKeywords(userKeywords);
+
+    // ユーザーキーワードを最優先で使用
+    let primaryFocus = "";
+    if (userKeywords && userKeywords.length > 0) {
+      primaryFocus = `特にユーザーの入力したキーワード「${userKeywordsStr}」をメインで反映してください。`;
     }
 
-    console.log("Cover generation requested for synopsis:", synopsis.substring(0, 200) + "...");
-
-    // 🎨 Advanced Multi-Style Cover Generation System
-    console.log("🎨 Initializing advanced cover generation with detailed prompts...");
-
-    // ジャンル別スタイルテンプレート
-    const STYLE_TEMPLATES = {
-      fantasy: {
-        style: "Epic fantasy book cover illustration, painterly digital art style, rich saturated colors, mystical ethereal atmosphere",
-        composition: "Cinematic wide shot with dramatic depth of field, rule of thirds composition",
-        lighting: "Magical golden hour lighting with volumetric light rays, warm amber and deep blue color palette",
-        elements: "Medieval fantasy elements, enchanted landscapes, mystical creatures or artifacts"
-      },
-      scifi: {
-        style: "Futuristic sci-fi cover art, sleek digital illustration, cyberpunk aesthetic with high-tech details",
-        composition: "Dynamic low-angle shot with strong geometric lines, asymmetrical balance",
-        lighting: "Neon lighting with electric blues and vivid purples, high contrast shadows, holographic effects",
-        elements: "Futuristic technology, space scenes, advanced machinery, alien landscapes"
-      },
-      romance: {
-        style: "Romantic watercolor illustration, soft impressionist painting style, pastel color harmony",
-        composition: "Intimate close-up composition, gentle curved lines, flowing organic shapes",
-        lighting: "Warm sunset lighting, soft diffused light, romantic golden tones with pink accents",
-        elements: "Elegant typography space, floral motifs, intimate settings, emotional atmosphere"
-      },
-      mystery: {
-        style: "Film noir inspired cover art, dramatic chiaroscuro technique, monochromatic with selective color",
-        composition: "Dutch angle composition, strong diagonal lines, mysterious negative space",
-        lighting: "High contrast lighting with deep shadows, dramatic spotlighting, urban night ambiance",
-        elements: "Urban environments, shadowy figures, vintage detective aesthetics, fog or rain effects"
-      },
-      horror: {
-        style: "Dark gothic horror illustration, textured brushwork, desaturated color palette with blood red accents",
-        composition: "Unsettling asymmetrical composition, claustrophobic framing",
-        lighting: "Harsh directional lighting creating ominous shadows, cold blue undertones",
-        elements: "Gothic architecture, supernatural elements, disturbing imagery, atmospheric fog"
-      },
-      literary: {
-        style: "Sophisticated artistic illustration, fine art painting technique, muted earth tone palette",
-        composition: "Balanced classical composition, thoughtful use of white space",
-        lighting: "Natural daylight, soft even lighting, subtle color transitions",
-        elements: "Symbolic imagery, minimalist design elements, intellectual atmosphere"
-      },
-      thriller: {
-        style: "High-energy action cover, dynamic digital art, bold contrasting colors",
-        composition: "Motion-focused composition with strong diagonal movement, explosive energy",
-        lighting: "Intense dramatic lighting, sharp contrasts, urgent color scheme",
-        elements: "Urban settings, vehicles, weapons, high-stakes scenarios"
-      },
-      historical: {
-        style: "Period-accurate illustration, classical painting technique, authentic historical color palette",
-        composition: "Traditional portrait or landscape composition, formal balance",
-        lighting: "Natural historical lighting appropriate to era, warm candlelight or daylight",
-        elements: "Period-appropriate costumes, architecture, and objects, historical accuracy"
-      }
-    };
-
-    // ジャンル検出システム（改良版 - より多様で精密）
-    const detectGenre = (content: string): string => {
-      const text = content.toLowerCase();
-
-      // マルチジャンル検出（重複スコア方式）
-      const genreScores = {
-        fantasy: 0,
-        scifi: 0,
-        romance: 0,
-        mystery: 0,
-        horror: 0,
-        literary: 0,
-        thriller: 0,
-        historical: 0
-      };
-
-      // ファンタジー
-      const fantasyTerms = [
-        /(魔法|magic|魔術|spell|魔王|魔女|wizard|witch)/gi,
-        /(ドラゴン|dragon|竜|エルフ|elf|dwarf|ドワーフ)/gi,
-        /(剣|sword|冒険|adventure|クエスト|quest)/gi,
-        /(王国|kingdom|城|castle|騎士|knight)/gi
-      ];
-
-      // SF
-      const scifiTerms = [
-        /(宇宙|space|未来|future|ロボット|robot|android)/gi,
-        /(技術|technology|人工知能|AI|サイボーグ|cyborg)/gi,
-        /(異世界|alien|宇宙船|spaceship|時間旅行|time)/gi,
-        /(テクノロジー|laser|plasma|quantum|nano)/gi
-      ];
-
-      // ロマンス
-      const romanceTerms = [
-        /(恋愛|love|romance|恋|愛|結婚|wedding)/gi,
-        /(デート|date|カップル|couple|kiss|抱擁|embrace)/gi,
-        /(運命|destiny|soul|heart|情熱|passion)/gi,
-        /(結ばれ|出会い|meet|first sight|forever)/gi
-      ];
-
-      // ミステリー
-      const mysteryTerms = [
-        /(探偵|detective|事件|case|犯罪|crime|murder)/gi,
-        /(謎|mystery|秘密|secret|手がかり|clue)/gi,
-        /(推理|deduction|証拠|evidence|容疑者|suspect)/gi,
-        /(警察|police|FBI|investigation|solve)/gi
-      ];
-
-      // ホラー
-      const horrorTerms = [
-        /(恐怖|horror|怖い|scary|悪魔|demon|ghost)/gi,
-        /(血|blood|死|death|殺人|murder|monster)/gi,
-        /(呪い|curse|呪縛|haunted|nightmare|dark)/gi,
-        /(ゾンビ|zombie|vampire|supernatural|evil)/gi
-      ];
-
-      // 文学
-      const literaryTerms = [
-        /(人生|life|哲学|philosophy|社会|society)/gi,
-        /(内省|reflection|思索|contemplation|意識|consciousness)/gi,
-        /(家族|family|世代|generation|伝統|tradition)/gi,
-        /(芸術|art|文化|culture|歴史|history)/gi
-      ];
-
-      // スリラー
-      const thrillerTerms = [
-        /(追跡|chase|逃亡|escape|危険|danger|threat)/gi,
-        /(スパイ|spy|agent|conspiracy|betrayal|裏切り)/gi,
-        /(緊張|tension|suspense|action|explosion|gun)/gi,
-        /(政府|government|軍|military|war|battle)/gi
-      ];
-
-      // 歴史
-      const historicalTerms = [
-        /(江戸|明治|大正|昭和|samurai|侍|戦国)/gi,
-        /(古代|ancient|中世|medieval|renaissance|victorian)/gi,
-        /(戦争|war|革命|revolution|帝国|empire)/gi,
-        /(時代|era|period|century|historical|vintage)/gi
-      ];
-
-      // スコア計算
-      const allTerms = {
-        fantasy: fantasyTerms,
-        scifi: scifiTerms,
-        romance: romanceTerms,
-        mystery: mysteryTerms,
-        horror: horrorTerms,
-        literary: literaryTerms,
-        thriller: thrillerTerms,
-        historical: historicalTerms
-      };
-
-      for (const [genre, terms] of Object.entries(allTerms)) {
-        for (const pattern of terms) {
-          const matches = text.match(pattern);
-          if (matches) {
-            genreScores[genre as keyof typeof genreScores] += matches.length;
-          }
-        }
-      }
-
-      // 最高スコアのジャンルを返す
-      const topGenre = Object.entries(genreScores).reduce((a, b) =>
-        genreScores[a[0] as keyof typeof genreScores] > genreScores[b[0] as keyof typeof genreScores] ? a : b
-      )[0];
-
-      console.log("🎯 Genre analysis scores:", genreScores);
-      console.log("📖 Detected primary genre:", topGenre);
-
-      return topGenre as keyof typeof STYLE_TEMPLATES;
-    };
-
-    // 小説内容分析
-    const analyzeContent = (content: string) => {
-      const analysis = {
-        wordCount: content.length,
-        mood: 'neutral',
-        setting: 'unknown',
-        characters: 0,
-        timeperiod: 'contemporary'
-      };
-
-      // ムード分析
-      if (content.match(/(暗い|悲し|絶望|憂鬱|dark|sad|despair)/gi)) {
-        analysis.mood = 'dark';
-      } else if (content.match(/(明るい|楽し|希望|happy|bright|joy)/gi)) {
-        analysis.mood = 'bright';
-      } else if (content.match(/(緊張|危険|恐怖|tense|dangerous|fear)/gi)) {
-        analysis.mood = 'tense';
-      } else if (content.match(/(ロマンチック|優雅|美し|romantic|elegant|beautiful)/gi)) {
-        analysis.mood = 'romantic';
-      }
-
-      // 設定分析
-      if (content.match(/(都市|街|city|urban|building)/gi)) {
-        analysis.setting = 'urban';
-      } else if (content.match(/(自然|森|山|海|nature|forest|mountain|ocean)/gi)) {
-        analysis.setting = 'nature';
-      } else if (content.match(/(学校|家|house|school|home)/gi)) {
-        analysis.setting = 'domestic';
-      } else if (content.match(/(宇宙|異世界|space|fantasy|magical)/gi)) {
-        analysis.setting = 'fantastical';
-      }
-
-      // キャラクター数推定
-      const characterIndicators = content.match(/(彼|彼女|私|あなた|名前|人|he|she|they|character)/gi);
-      analysis.characters = characterIndicators ? Math.min(characterIndicators.length / 10, 5) : 1;
-
-      console.log("📊 Content analysis:", analysis);
-      return analysis;
-    };
-
-    const primaryGenre = detectGenre(synopsis);
-    const contentAnalysis = analyzeContent(synopsis);
-    const template = STYLE_TEMPLATES[primaryGenre as keyof typeof STYLE_TEMPLATES] || STYLE_TEMPLATES.literary;
-
-    // 詳細プロンプト生成
-    const coverPrompt = `Create a professional book cover illustration with the following specifications:
-
-ART STYLE: ${template.style}
-COMPOSITION: ${template.composition}
-LIGHTING: ${template.lighting}
-VISUAL ELEMENTS: ${template.elements}
-
-STORY CONTEXT: Based on this narrative - "${synopsis.substring(0, 400)}${synopsis.length > 400 ? '...' : ''}"
-
-MOOD: ${contentAnalysis.mood} atmosphere
-SETTING: ${contentAnalysis.setting} environment
-CHARACTER COUNT: Design for ${Math.round(contentAnalysis.characters)} main character(s)
-
-TECHNICAL REQUIREMENTS:
-- Book cover proportions (6:9 aspect ratio)
-- Professional publishing quality
-- NO text or letters anywhere in the image
-- Focus on visual storytelling that captures the essence of "${primaryGenre}" genre
-- Ensure the design works as a thumbnail and full-size cover
-
-Create a visually striking cover that immediately communicates the genre and draws readers in.`;
+    // シンプルで明確なプロンプト
+    const coverPrompt = `以下の内容を元に、本の表紙を作成してください。
+・ZINEから抽出したキーワード: ${zineKeywordsStr}
+・小説から抽出したキーワード: ${novelKeywordsStr}
+・ユーザーの入力したキーワード: ${userKeywordsStr}
+${primaryFocus}またアスペクト比は6:9、画像に文章は含めないでください。`;
 
     try {
       // Try direct HTTP API call to Vertex AI first (working method)
@@ -1183,7 +973,7 @@ Create a visually striking cover that immediately communicates the genre and dra
           }],
           // 最適化された画像生成設定 - Google推奨準拠
           generation_config: {
-            response_modalities: ["IMAGE"],  // 画像生成のみ
+            responseModalities: ["TEXT", "IMAGE"],  // 必須: テキストと画像の両方（純粋な画像のみはサポートされない）
             max_output_tokens: 8192,
             temperature: 1.3,  // 高創造性（Google推奨: "higher temperatures can lead to more diverse or creative results"）
             top_p: 0.95,       // 高多様性（より幅広い選択肢を許可）
@@ -1211,15 +1001,15 @@ Create a visually striking cover that immediately communicates the genre and dra
         };
         
         console.log("Making direct API call to:", apiUrl);
-        console.log("🔍 Advanced Visual Processing Analysis:");
-        console.log("  - Detected Genre:", primaryGenre);
-        console.log("  - Content Analysis:", contentAnalysis);
-        console.log("  - Template Used:", template);
-        console.log("  - Synopsis length:", synopsis.length);
-        console.log("  - Enhanced Prompt length:", coverPrompt.length);
+        console.log("🔍 Keyword-Based Cover Generation Analysis:");
+        console.log("  - ZINE Keywords:", zineKeywordsStr);
+        console.log("  - Novel Keywords:", novelKeywordsStr);
+        console.log("  - User Keywords:", userKeywordsStr);
+        console.log("  - Primary Focus:", primaryFocus || "No specific focus");
+        console.log("  - Prompt length:", coverPrompt.length);
         console.log("  - Temperature:", 1.3, "(High Creativity)");
         console.log("  - Top-P:", 0.95, "(High Diversity)");
-        console.log("🚀 Sending genre-specific detailed prompt to Vertex AI...");
+        console.log("🚀 Sending keyword-based prompt to Vertex AI...");
         
         // Use Node.js built-in fetch (available in Node 18+)
         // Node.js built-in fetch is available without import
@@ -1437,7 +1227,7 @@ Create a visually striking cover that immediately communicates the genre and dra
           contents: [{
             role: "user",
             parts: [{
-              text: `次の小説の表紙デザインの詳細な説明を作成してください：\n\n${synopsis}`
+              text: coverPrompt
             }]
           }]
         });

@@ -2331,7 +2331,53 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
     }
   }
 
-  const handleCoverGeneration = async () => {
+  // 🔍 ZINE キーワード抽出関数
+  const extractZineKeywords = (pages: Page[]): string[] => {
+    const keywords: string[] = []
+
+    pages.forEach(page => {
+      page.elements.forEach(element => {
+        if (element.type === 'text' && element.content && element.content.trim()) {
+          // テキスト要素から重要なキーワードを抽出
+          const text = element.content.toLowerCase()
+          const words = text.split(/\s+|[、。,.]/).filter(word => word.length > 1)
+          keywords.push(...words.slice(0, 3)) // 各テキストから最大3つまで
+        }
+        if (element.type === 'image' && element.description) {
+          // 画像の説明からキーワードを抽出
+          const desc = element.description.toLowerCase()
+          const words = desc.split(/\s+|[、。,.]/).filter(word => word.length > 1)
+          keywords.push(...words.slice(0, 2)) // 各画像説明から最大2つまで
+        }
+      })
+    })
+
+    // 重複除去と長さ制限
+    return [...new Set(keywords)].slice(0, 8)
+  }
+
+  // 📖 小説キーワード抽出関数
+  const extractNovelKeywords = (content: string): string[] => {
+    if (!content.trim()) return []
+
+    const keywords: string[] = []
+    const text = content.toLowerCase()
+
+    // 簡単なキーワード抽出（改良の余地あり）
+    const sentences = text.split(/[。！？.]/).filter(s => s.trim().length > 5)
+
+    sentences.slice(0, 5).forEach(sentence => {
+      const words = sentence.split(/\s+|[、,]/).filter(word =>
+        word.length > 1 && !word.match(/^(は|が|を|に|で|と|の|から|まで|より|こと|もの|ため|とき)$/)
+      )
+      keywords.push(...words.slice(0, 2))
+    })
+
+    // 重複除去と長さ制限
+    return [...new Set(keywords)].slice(0, 6)
+  }
+
+  const handleCoverGeneration = async (userKeywords: string[] = []) => {
     if (!novelContent.trim()) {
       notifications.warning("小説が必要です", "表紙を生成するには、まず小説を生成してください")
       return
@@ -2339,11 +2385,21 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
 
     setIsGeneratingCover(true)
     try {
-      console.log("🚀 Starting simplified cover generation process...")
+      console.log("🚀 Starting keyword-based cover generation process...")
 
-      // 📡 Send to simplified generateCover API - let AI decide everything
+      // 🔍 キーワード抽出
+      const zineKeywords = extractZineKeywords(pages)
+      const novelKeywords = extractNovelKeywords(novelContent)
+
+      console.log("📚 Extracted ZINE keywords:", zineKeywords)
+      console.log("📖 Extracted novel keywords:", novelKeywords)
+      console.log("👤 User keywords:", userKeywords)
+
+      // 📡 新しいキーワードベースAPIを使用
       const result = await generateCover({
-        synopsis: novelContent // Send only novel content, let AI handle the rest
+        zineKeywords,
+        novelKeywords,
+        userKeywords
       })
 
       console.log("📨 Cover generation result:", result)

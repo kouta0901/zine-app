@@ -194,20 +194,23 @@ Begin crafting your original novel now, drawing inspiration from the visual elem
 // 🔥 MEGA ULTRA STRICT PROMPT - 3層分離システム
 
 
-// ✨ Simplified Cover Generation - Direct Data Transfer
+// ✨ Keyword-Based Cover Generation - Direct Data Transfer
 export async function generateCover(payload: {
-  synopsis: string;
-  title?: string;
-  keywords?: string[];
+  zineKeywords?: string[];
+  novelKeywords?: string[];
+  userKeywords?: string[];
 }): Promise<{ url: string; message?: string }> {
-  console.log("✨ Simplified Cover Generation - sending raw data to server");
+  console.log("✨ Keyword-Based Cover Generation - sending keywords to server");
+  console.log("  - ZINE Keywords:", payload.zineKeywords);
+  console.log("  - Novel Keywords:", payload.novelKeywords);
+  console.log("  - User Keywords:", payload.userKeywords);
 
-  // Send raw data directly to server for processing
+  // Send keyword data directly to server for processing
   try {
     const result = await apiCall("/cover", {
-      synopsis: payload.synopsis,
-      title: payload.title,
-      keywords: payload.keywords
+      zineKeywords: payload.zineKeywords,
+      novelKeywords: payload.novelKeywords,
+      userKeywords: payload.userKeywords
     });
 
     console.log("✅ Cover generated successfully!");
