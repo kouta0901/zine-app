@@ -61,6 +61,7 @@ export async function novelizeWithImages(payload: {
 export async function novelizeWithImagesEnhanced(payload: {
   concept: string;
   world: string;
+  characters?: Array<{name: string, personality: string}>;
   images: string[];
   title: string;
   imageDescriptions?: string[];

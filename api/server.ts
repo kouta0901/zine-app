@@ -466,10 +466,11 @@ app.post("/novelize", async (req, res) => {
 // 1.5. 画像ベース小説化エンドポイント
 app.post("/novelize-with-images", async (req, res) => {
   try {
-    const { 
-      concept, 
-      world, 
-      images, 
+    const {
+      concept,
+      world,
+      characters,
+      images,
       title,
       imageDescriptions,
       detailedPrompt,
@@ -548,6 +549,18 @@ app.post("/novelize-with-images", async (req, res) => {
     
     // Build completely natural prompt without any structured formatting or technical data
     let enhancedPrompt = `画像からインスピレーションを得て、魅力的な物語を創作してください。読者の心に響く感情豊かで自然な小説を書いてください。登場人物の魅力や関係性を大切にし、印象的で読み応えのある展開を描いてください。`;
+
+    // 登場人物情報をプロンプトに追加
+    if (characters && characters.length > 0) {
+      const charactersPrompt = characters
+        .filter((ch: any) => ch.name && ch.personality)
+        .map((ch: any) => `・${ch.name}: ${ch.personality}`)
+        .join('\n');
+
+      if (charactersPrompt) {
+        enhancedPrompt += `\n\n主な登場人物：\n${charactersPrompt}\n\nこれらのキャラクターを活用して物語を構築してください。`;
+      }
+    }
 
     // Remove all technical prompt additions to prevent contamination
 

@@ -2127,7 +2127,16 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
     
     // Convert all data to natural language format to prevent technical contamination
     const concept = conceptConfig.genre === 'none' ? "自由創作" : (conceptConfig.genre || "自由創作")
-    const world = `${worldviewConfig.stage || "架空の世界"}を舞台とした${worldviewConfig.scenario || "物語"}として`
+
+    // 登場人物情報を整形
+    const charactersInfo = worldviewConfig.characters
+      ?.filter((ch: any) => ch.name && ch.personality)
+      ?.map((ch: any) => `${ch.name}（${ch.personality}）`)
+      ?.join('、') || ""
+
+    const world = `${worldviewConfig.stage || "架空の世界"}を舞台とした${worldviewConfig.scenario || "物語"}${
+      charactersInfo ? `。登場人物：${charactersInfo}` : ""
+    }として`
     
     setIsGeneratingNovel(true)
     
@@ -2147,6 +2156,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
         const result = await novelizeWithImagesEnhanced({
           concept,
           world,
+          characters: worldviewConfig.characters?.filter((ch: any) => ch.name && ch.personality) || [],
           images,
           title: "",  // No title to prevent contamination
           // imageDescriptions: descriptions, // 🔥 REMOVED: Stop sending imageDescriptions to prevent contamination
