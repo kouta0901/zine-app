@@ -49,93 +49,7 @@ interface TextSuggestion {
   timestamp: Date
 }
 
-// 動的フォントサイズとページ分割のフック
-const useResponsiveNovelDisplay = (novelContent: string, originalPages: string[]) => {
-  const [fontSize, setFontSize] = useState(16); // デフォルトサイズ
-  const [dynamicPages, setDynamicPages] = useState<string[]>([]);
-  
-  // 動的ページ分割関数（改善版）
-  const createDynamicPages = (content: string, maxCharsPerPage: number) => {
-    const pages = [];
-    let remaining = content;
-    
-    while (remaining.length > 0) {
-      // より保守的な文字数で分割（80%の容量を使用）
-      const conservativeCharsPerPage = Math.floor(maxCharsPerPage * 0.8);
-      
-      if (remaining.length <= conservativeCharsPerPage) {
-        pages.push(remaining);
-        break;
-      }
-      
-      // 自然な区切りで分割
-      const pageContent = remaining.substring(0, conservativeCharsPerPage);
-      const lastParagraph = pageContent.lastIndexOf('\n\n');
-      const lastSentence = pageContent.lastIndexOf('。');
-      const lastComma = pageContent.lastIndexOf('、');
-      const lastSpace = pageContent.lastIndexOf('　'); // 全角スペース
-      
-      // より良い分割点を選択
-      const splitPoint = Math.max(lastParagraph, lastSentence, lastComma, lastSpace);
-      
-      // 分割点が見つからない場合は、より短い文字数で強制分割
-      const actualSplitPoint = splitPoint > conservativeCharsPerPage * 0.6 
-        ? splitPoint 
-        : Math.floor(conservativeCharsPerPage * 0.7);
-      
-      pages.push(remaining.substring(0, actualSplitPoint));
-      remaining = remaining.substring(actualSplitPoint);
-    }
-    
-    return pages;
-  };
-  
-  useEffect(() => {
-    const calculateDisplaySettings = () => {
-      const screenHeight = window.innerHeight;
-      const screenWidth = window.innerWidth;
-      
-      // デフォルトサイズを基準に調整（基準: 1200x800）
-      const baseFontSize = 16;
-      const widthScale = screenWidth / 1200;
-      const heightScale = screenHeight / 800;
-      const scaleFactor = Math.min(widthScale, heightScale, 1.2); // 最大1.2倍まで
-      
-      const newFontSize = Math.max(12, Math.min(20, baseFontSize * scaleFactor));
-      setFontSize(newFontSize);
-      
-      // より正確なページあたりの文字数を計算
-      // 実際のページ幅: 画面幅の40% - パディング(24px * 2)
-      const actualPageWidth = (screenWidth * 0.4) - 48;
-      // 実際のページ高さ: 画面高さの60% - パディング(64px + 32px)
-      const actualPageHeight = (screenHeight * 0.6) - 96;
-      
-      // 日本語文字の幅をより正確に計算（全角文字の幅）
-      const charWidth = newFontSize * 1.0; // 日本語はほぼ正方形
-      const lineHeight = newFontSize * 2.2;
-      
-      const charsPerLine = Math.floor(actualPageWidth / charWidth);
-      const linesPerPage = Math.floor(actualPageHeight / lineHeight);
-      const maxCharsPerPage = charsPerLine * linesPerPage;
-      
-      console.log(`📏 Page calculation: ${charsPerLine} chars/line × ${linesPerPage} lines = ${maxCharsPerPage} chars/page`);
-      
-      // 動的ページ分割
-      if (novelContent) {
-        const pages = createDynamicPages(novelContent, maxCharsPerPage);
-        setDynamicPages(pages);
-      } else {
-        setDynamicPages(originalPages);
-      }
-    };
-    
-    calculateDisplaySettings();
-    window.addEventListener('resize', calculateDisplaySettings);
-    return () => window.removeEventListener('resize', calculateDisplaySettings);
-  }, [novelContent, originalPages]);
-  
-  return { fontSize, pages: dynamicPages };
-};
+// MyBooksと統一: text-baseクラス（16px固定）を使用
 
 export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: ZineCreatorProps) {
   const canvasRef = useRef<ZineCanvasHandle>(null)
@@ -177,11 +91,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
   const [novelPages, setNovelPages] = useState<string[]>([])
   const [textMeasureRef, setTextMeasureRef] = useState<HTMLDivElement | null>(null)
 
-  // 動的フォントサイズとページ分割を使用
-  const { fontSize, pages: dynamicPages } = useResponsiveNovelDisplay(
-    novelContent, 
-    novelPages
-  )
+  // MyBooksとの統一: text-baseクラス（16px固定）を使用
 
   const [selectedText, setSelectedText] = useState<TextSelection | null>(null)
   const [isSelectionProtected, setIsSelectionProtected] = useState(false) // 選択保護フラグ
@@ -3281,7 +3191,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
                               padding: '0',
                               margin: '0',
                               fontFamily: 'Georgia, "Times New Roman", serif',
-                              fontSize: `${fontSize}px`,
+                              fontSize: '16px',
                               lineHeight: '2.2',
                               whiteSpace: 'pre-wrap',
                               visibility: 'hidden',
@@ -3296,14 +3206,14 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
                               <div className="absolute top-6 left-6 text-xs" style={{ color: "#a0896c", fontFamily: "serif" }}>Chapter 1</div>
                               <div className="px-12 py-16 h-full pb-8">
                                 <div
-                                  className="text-base leading-8 whitespace-pre-wrap cursor-text"
+                                  className="text-base whitespace-pre-wrap cursor-text"
                                   style={{
-                                    color: currentTheme.text,
+                                    color: "#4a3c28",
                                     fontFamily: 'Georgia, "Times New Roman", serif',
+                                    fontSize: "16px",
                                     lineHeight: "2.2",
                                     textShadow: "0 1px 2px rgba(0,0,0,0.05)",
-                                    maxHeight: "calc(100% - 2rem)",
-                                    fontSize: `${fontSize}px`
+                                    maxHeight: "calc(100% - 2rem)"
                                   }}
                                   onMouseUp={handleTextSelection}
                                   onMouseDown={(e) => {
@@ -3319,12 +3229,12 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
                                     }
                                   }}
                                 >
-                                  {(dynamicPages.length > 0 || novelContent)
+                                  {(novelPages.length > 0 || novelContent)
                                     ? renderTextWithSuggestions(
-                                        dynamicPages.length > 0
-                                          ? dynamicPages[currentNovelPage * 2] || ""
+                                        novelPages.length > 0
+                                          ? novelPages[currentNovelPage * 2] || ""
                                           : (() => {
-                                              // dynamicPagesが空でもnovelContentがある場合は動的に分割
+                                              // novelPagesが空でもnovelContentがある場合は動的に分割
                                               const fallbackPages = splitNovelContent(novelContent)
                                               return fallbackPages[currentNovelPage * 2] || ""
                                             })()
@@ -3342,14 +3252,14 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
                             <div className="w-1/2 pl-4 relative">
                               <div className="px-12 py-16 h-full pb-8">
                                 <div
-                                  className="text-base leading-8 whitespace-pre-wrap cursor-text"
+                                  className="text-base whitespace-pre-wrap cursor-text"
                                   style={{
-                                    color: currentTheme.text,
+                                    color: "#4a3c28",
                                     fontFamily: 'Georgia, "Times New Roman", serif',
+                                    fontSize: "16px",
                                     lineHeight: "2.2",
                                     textShadow: "0 1px 2px rgba(0,0,0,0.05)",
-                                    maxHeight: "calc(100% - 2rem)",
-                                    fontSize: `${fontSize}px`
+                                    maxHeight: "calc(100% - 2rem)"
                                   }}
                                   onMouseUp={handleTextSelection}
                                   onMouseDown={(e) => {
@@ -3365,12 +3275,12 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
                                     }
                                   }}
                                 >
-                                  {(dynamicPages.length > 0 || novelContent)
+                                  {(novelPages.length > 0 || novelContent)
                                     ? (() => {
-                                        if (dynamicPages.length > 0) {
-                                          return dynamicPages[currentNovelPage * 2 + 1] || ""
+                                        if (novelPages.length > 0) {
+                                          return novelPages[currentNovelPage * 2 + 1] || ""
                                         } else if (novelContent) {
-                                          // dynamicPagesが空でもnovelContentがある場合は動的に分割
+                                          // novelPagesが空でもnovelContentがある場合は動的に分割
                                           const fallbackPages = splitNovelContent(novelContent)
                                           return fallbackPages[currentNovelPage * 2 + 1] || ""
                                         }
