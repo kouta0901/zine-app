@@ -376,14 +376,16 @@ export function ZineMenuPanel({
                       <div className="space-y-3">
                         <div>
                           <div className="text-xs mb-1" style={{ color: '#8b7355' }}>ジャンル</div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <Button size="sm" variant={conceptConfig.genre === 'none' ? 'default' : 'outline'} onClick={() => setConceptConfig({ ...conceptConfig, genre: 'none' })}>選ばない</Button>
-                            <Button size="sm" variant={conceptConfig.genre === 'mystery' ? 'default' : 'outline'} onClick={() => setConceptConfig({ ...conceptConfig, genre: 'mystery' })}>ミステリー</Button>
-                            <Button size="sm" variant={conceptConfig.genre === 'fantasy' ? 'default' : 'outline'} onClick={() => setConceptConfig({ ...conceptConfig, genre: 'fantasy' })}>ファンタジー</Button>
-                            <Button size="sm" variant={conceptConfig.genre === 'horror' ? 'default' : 'outline'} onClick={() => setConceptConfig({ ...conceptConfig, genre: 'horror' })}>ホラー</Button>
-                            <Button size="sm" variant={conceptConfig.genre === 'history' ? 'default' : 'outline'} onClick={() => setConceptConfig({ ...conceptConfig, genre: 'history' })}>歴史</Button>
-                            <Button size="sm" variant={conceptConfig.genre === 'sf' ? 'default' : 'outline'} onClick={() => setConceptConfig({ ...conceptConfig, genre: 'sf' })}>SF</Button>
-                            <Button size="sm" variant={conceptConfig.genre === 'romance' ? 'default' : 'outline'} onClick={() => setConceptConfig({ ...conceptConfig, genre: 'romance' })}>恋愛小説</Button>
+                          <div className="space-y-2">
+                            <Button size="sm" variant={conceptConfig.genre === 'none' ? 'default' : 'outline'} onClick={() => setConceptConfig({ ...conceptConfig, genre: 'none' })} className="w-full">選ばない</Button>
+                            <div className="grid grid-cols-2 gap-2">
+                              <Button size="sm" variant={conceptConfig.genre === 'mystery' ? 'default' : 'outline'} onClick={() => setConceptConfig({ ...conceptConfig, genre: 'mystery' })}>ミステリー</Button>
+                              <Button size="sm" variant={conceptConfig.genre === 'fantasy' ? 'default' : 'outline'} onClick={() => setConceptConfig({ ...conceptConfig, genre: 'fantasy' })}>ファンタジー</Button>
+                              <Button size="sm" variant={conceptConfig.genre === 'horror' ? 'default' : 'outline'} onClick={() => setConceptConfig({ ...conceptConfig, genre: 'horror' })}>ホラー</Button>
+                              <Button size="sm" variant={conceptConfig.genre === 'history' ? 'default' : 'outline'} onClick={() => setConceptConfig({ ...conceptConfig, genre: 'history' })}>歴史</Button>
+                              <Button size="sm" variant={conceptConfig.genre === 'sf' ? 'default' : 'outline'} onClick={() => setConceptConfig({ ...conceptConfig, genre: 'sf' })}>SF</Button>
+                              <Button size="sm" variant={conceptConfig.genre === 'romance' ? 'default' : 'outline'} onClick={() => setConceptConfig({ ...conceptConfig, genre: 'romance' })}>恋愛小説</Button>
+                            </div>
                           </div>
                         </div>
                         <div>

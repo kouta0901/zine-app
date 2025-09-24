@@ -231,14 +231,16 @@ export function NovelViewer({ novelData, onClose, onEdit }: NovelViewerProps) {
                       <div className="absolute top-6 left-6 text-xs" style={{ color: "#a0896c", fontFamily: "serif" }}>
                         {novelData.title}
                       </div>
-                      <div className="px-12 py-20 h-full pb-20">
+                      <div className="px-12 py-16 h-full pb-8">
                         <div
-                          className="text-lg leading-8 whitespace-pre-wrap cursor-text h-full"
+                          className="text-base leading-8 whitespace-pre-wrap cursor-text overflow-y-hidden"
                           style={{
                             color: "#4a3c28",
                             fontFamily: 'Georgia, "Times New Roman", serif',
                             lineHeight: "2.2",
                             textShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                            maxHeight: "calc(100% - 2rem)",
+                            height: "100%"
                           }}
                         >
                           {novelPages[(currentSpreadPage - 1) * 2] || ""}
@@ -248,14 +250,16 @@ export function NovelViewer({ novelData, onClose, onEdit }: NovelViewerProps) {
 
                     {/* Right page */}
                     <div className="w-1/2 pl-4 relative">
-                      <div className="px-12 py-20 h-full pb-20">
+                      <div className="px-12 py-16 h-full pb-8">
                         <div
-                          className="text-lg leading-8 whitespace-pre-wrap cursor-text h-full"
+                          className="text-base leading-8 whitespace-pre-wrap cursor-text overflow-y-hidden"
                           style={{
                             color: "#4a3c28",
                             fontFamily: 'Georgia, "Times New Roman", serif',
                             lineHeight: "2.2",
                             textShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                            maxHeight: "calc(100% - 2rem)",
+                            height: "100%"
                           }}
                         >
                           {novelPages[(currentSpreadPage - 1) * 2 + 1] || ""}
