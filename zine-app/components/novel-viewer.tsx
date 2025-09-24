@@ -233,14 +233,13 @@ export function NovelViewer({ novelData, onClose, onEdit }: NovelViewerProps) {
                       </div>
                       <div className="px-12 py-16 h-full pb-8">
                         <div
-                          className="text-base leading-8 whitespace-pre-wrap cursor-text overflow-y-hidden"
+                          className="text-base leading-8 whitespace-pre-wrap cursor-text"
                           style={{
                             color: "#4a3c28",
                             fontFamily: 'Georgia, "Times New Roman", serif',
                             lineHeight: "2.2",
                             textShadow: "0 1px 2px rgba(0,0,0,0.05)",
-                            maxHeight: "calc(100% - 2rem)",
-                            height: "100%"
+                            maxHeight: "calc(100% - 2rem)"
                           }}
                         >
                           {novelPages[(currentSpreadPage - 1) * 2] || ""}
@@ -252,14 +251,13 @@ export function NovelViewer({ novelData, onClose, onEdit }: NovelViewerProps) {
                     <div className="w-1/2 pl-4 relative">
                       <div className="px-12 py-16 h-full pb-8">
                         <div
-                          className="text-base leading-8 whitespace-pre-wrap cursor-text overflow-y-hidden"
+                          className="text-base leading-8 whitespace-pre-wrap cursor-text"
                           style={{
                             color: "#4a3c28",
                             fontFamily: 'Georgia, "Times New Roman", serif',
                             lineHeight: "2.2",
                             textShadow: "0 1px 2px rgba(0,0,0,0.05)",
-                            maxHeight: "calc(100% - 2rem)",
-                            height: "100%"
+                            maxHeight: "calc(100% - 2rem)"
                           }}
                         >
                           {novelPages[(currentSpreadPage - 1) * 2 + 1] || ""}

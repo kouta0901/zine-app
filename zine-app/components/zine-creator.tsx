@@ -175,6 +175,7 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
   const [bookTheme, setBookTheme] = useState<"light" | "sepia" | "dark">("light")
   const [currentNovelPage, setCurrentNovelPage] = useState(0)
   const [novelPages, setNovelPages] = useState<string[]>([])
+  const [textMeasureRef, setTextMeasureRef] = useState<HTMLDivElement | null>(null)
 
   // 動的フォントサイズとページ分割を使用
   const { fontSize, pages: dynamicPages } = useResponsiveNovelDisplay(
@@ -302,6 +303,30 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
       console.log('✅ Default state initialized for new creation')
     }
   }, [initialData]) // initialDataが変更された時に実行
+
+  // 動的再計算システム - コンテンツ変更時の自動再分割
+  useEffect(() => {
+    if (novelContent && textMeasureRef && currentMode === 'novel') {
+      console.log('🔄 Recalculating novel pages with DOM-height based splitting')
+      const newPages = splitNovelContentByHeight(novelContent)
+      setNovelPages(newPages)
+      console.log(`📊 Pages recalculated: ${newPages.length} pages`)
+    }
+  }, [novelContent, currentMode, textMeasureRef])
+
+  // リサイズ対応（オプション）
+  useEffect(() => {
+    const handleResize = () => {
+      if (novelContent && textMeasureRef && currentMode === 'novel') {
+        console.log('📐 Window resized, recalculating pages')
+        const newPages = splitNovelContentByHeight(novelContent)
+        setNovelPages(newPages)
+      }
+    }
+
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [novelContent, textMeasureRef, currentMode])
 
   const zineMenuSections = [
     { id: "concept" as MenuSection, label: "コンセプト", icon: Target },
@@ -432,40 +457,91 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
     }
   }
 
-  // テキスト分割機能（小説モード用）- 最適化版
-  const splitNovelContent = (content: string): string[] => {
+  // DOM高さベース動的テキスト分割機能（小説モード用）- 完全可読性保証
+  const splitNovelContentByHeight = (content: string): string[] => {
     if (!content.trim()) return []
-    
-    // 最適化された文字数計算 - テキストオーバーフロー問題の根本解決
-    // NovelViewer の表示領域: px-12 py-16 h-full pb-8 (統一パディング)
-    // フォント: 16px, 行間: 2.2, 実効高さ: 約466px
-    // ページ数表示エリア: bottom-6 (約24px) + 安全マージン
-    // 1行: 約30文字 × 約12.7行 = 380文字/ページ (ページ番号被り完全防止)
-    const CHARS_PER_PAGE = 380 // ページ番号との重複を完全に防ぐ最適化された設定
-    
+
+    // Fallback用の安全な文字数（Georgia serif + 実測値ベース）
+    const SAFE_CHARS = 350
+
+    // 測定要素が利用不可の場合のフォールバック
+    if (!textMeasureRef) {
+      return splitByCharacterCount(content, SAFE_CHARS)
+    }
+
+    // 実際の親コンテナ高さを取得
+    const containerElement = textMeasureRef.parentElement
+    if (!containerElement) {
+      return splitByCharacterCount(content, SAFE_CHARS)
+    }
+
+    const maxHeight = containerElement.clientHeight - 32 // pb-8考慮
     const paragraphs = content.split('\n\n')
     const pages: string[] = []
     let currentPage = ""
-    
+
+    for (const paragraph of paragraphs) {
+      const testContent = currentPage + (currentPage ? '\n\n' : '') + paragraph
+
+      // 測定要素で実際の高さをチェック
+      textMeasureRef.innerHTML = testContent.replace(/\n/g, '<br>')
+      const actualHeight = textMeasureRef.scrollHeight
+
+      if (actualHeight <= maxHeight) {
+        currentPage = testContent
+      } else {
+        // 段落が長すぎる場合は文単位で分割
+        if (!currentPage.trim()) {
+          const sentences = paragraph.split('。')
+          let sentencePage = ""
+
+          for (const sentence of sentences) {
+            const testSentence = sentencePage + sentence + '。'
+            textMeasureRef.innerHTML = testSentence.replace(/\n/g, '<br>')
+
+            if (textMeasureRef.scrollHeight <= maxHeight) {
+              sentencePage = testSentence
+            } else {
+              if (sentencePage.trim()) {
+                pages.push(sentencePage.trim())
+              }
+              sentencePage = sentence + '。'
+            }
+          }
+          currentPage = sentencePage
+        } else {
+          pages.push(currentPage.trim())
+          currentPage = paragraph
+        }
+      }
+    }
+
+    if (currentPage.trim()) pages.push(currentPage.trim())
+    return balancePageContent(pages)
+  }
+
+  // フォールバック用文字数ベース分割
+  const splitByCharacterCount = (content: string, maxChars: number): string[] => {
+    const paragraphs = content.split('\n\n')
+    const pages: string[] = []
+    let currentPage = ""
+
     for (const paragraph of paragraphs) {
       const paragraphWithBreak = paragraph + '\n\n'
-      
-      // 段落がページ制限を超える場合の改良ロジック
-      if (currentPage.length + paragraphWithBreak.length <= CHARS_PER_PAGE) {
+
+      if (currentPage.length + paragraphWithBreak.length <= maxChars) {
         currentPage += paragraphWithBreak
       } else {
-        // 現在のページが空でない場合のみページを追加（段落の途中で分割を避ける）
         if (currentPage.trim()) {
           pages.push(currentPage.trim())
-        currentPage = paragraphWithBreak
+          currentPage = paragraphWithBreak
         } else {
-          // 現在のページが空の場合は長い段落を文単位で分割
           const sentences = paragraph.split('。')
           let tempPage = currentPage
 
           for (let i = 0; i < sentences.length; i++) {
             const sentence = sentences[i] + (i < sentences.length - 1 ? '。' : '')
-            if (tempPage.length + sentence.length <= CHARS_PER_PAGE) {
+            if (tempPage.length + sentence.length <= maxChars) {
               tempPage += sentence
             } else {
               if (tempPage.trim()) {
@@ -478,15 +554,17 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
         }
       }
     }
-    
+
     if (currentPage.trim()) {
       pages.push(currentPage.trim())
     }
-    
-    // 最終的なページバランス調整 - 両ページの表示品質向上
-    const balancedPages = balancePageContent(pages)
 
-    return balancedPages.length > 0 ? balancedPages : [content]
+    return balancePageContent(pages)
+  }
+
+  // メイン関数（後方互換性のため）
+  const splitNovelContent = (content: string): string[] => {
+    return splitNovelContentByHeight(content)
   }
 
   // ページバランス調整関数 - 両ページの文字数を均等に
@@ -3191,6 +3269,26 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
                             </div>
                           </div>
 
+                          {/* テキスト高さ測定用隠し要素 */}
+                          <div
+                            ref={setTextMeasureRef}
+                            className="absolute opacity-0 pointer-events-none"
+                            style={{
+                              position: 'fixed',
+                              top: '-9999px',
+                              left: '-9999px',
+                              width: '404px', // 実際のテキスト幅 (500px - 96px padding)
+                              padding: '0',
+                              margin: '0',
+                              fontFamily: 'Georgia, "Times New Roman", serif',
+                              fontSize: `${fontSize}px`,
+                              lineHeight: '2.2',
+                              whiteSpace: 'pre-wrap',
+                              visibility: 'hidden',
+                              zIndex: -1
+                            }}
+                          />
+
                           {/* Page content container */}
                           <div className="flex h-full relative z-10">
                             {/* Left page */}
@@ -3198,14 +3296,13 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
                               <div className="absolute top-6 left-6 text-xs" style={{ color: "#a0896c", fontFamily: "serif" }}>Chapter 1</div>
                               <div className="px-12 py-16 h-full pb-8">
                                 <div
-                                  className="text-base leading-8 whitespace-pre-wrap cursor-text overflow-y-hidden"
+                                  className="text-base leading-8 whitespace-pre-wrap cursor-text"
                                   style={{
                                     color: currentTheme.text,
                                     fontFamily: 'Georgia, "Times New Roman", serif',
                                     lineHeight: "2.2",
                                     textShadow: "0 1px 2px rgba(0,0,0,0.05)",
                                     maxHeight: "calc(100% - 2rem)",
-                                    height: "100%",
                                     fontSize: `${fontSize}px`
                                   }}
                                   onMouseUp={handleTextSelection}
@@ -3245,14 +3342,13 @@ export function ZineCreator({ onBack, initialData, onPublishedBooksUpdate }: Zin
                             <div className="w-1/2 pl-4 relative">
                               <div className="px-12 py-16 h-full pb-8">
                                 <div
-                                  className="text-base leading-8 whitespace-pre-wrap cursor-text overflow-y-hidden"
+                                  className="text-base leading-8 whitespace-pre-wrap cursor-text"
                                   style={{
                                     color: currentTheme.text,
                                     fontFamily: 'Georgia, "Times New Roman", serif',
                                     lineHeight: "2.2",
                                     textShadow: "0 1px 2px rgba(0,0,0,0.05)",
                                     maxHeight: "calc(100% - 2rem)",
-                                    height: "100%",
                                     fontSize: `${fontSize}px`
                                   }}
                                   onMouseUp={handleTextSelection}
